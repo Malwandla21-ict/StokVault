@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    persistence.xml configures JPA (Jakarta Persistence), the layer that maps
+    Java classes (@Entity) to database tables.
+-->
+<persistence version="3.2"
+             xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence https://jakarta.ee/xml/ns/persistence/persistence_3_2.xsd">
+
+    <!--
+        A "persistence unit" is a named group of entities + a database connection.
+        JTA = transactions are managed by the server (EJBs start/commit them for you).
+    -->
+    <persistence-unit name="StokVaultPU" transaction-type="JTA">
+
+        <!--
+            Look up the connection pool Payara exposes under this JNDI name.
+            The app never sees the DB URL/password; those live in Payara (see README).
+        -->
+        <jta-data-source>jdbc/StokVaultDS</jta-data-source>
+
+        <!-- Pick up every @Entity class in this WAR automatically -->
+        <exclude-unlisted-classes>false</exclude-unlisted-classes>
+
+        <properties>
+            <!--
+                Create any missing tables on deploy. Existing tables and data are kept.
+                (Use "drop-and-create" to wipe and rebuild on each deploy; "none" in production.)
+            -->
+            <property name="jakarta.persistence.schema-generation.database.action" value="create"/>
+
+            <!--
+                Payara's JPA provider is EclipseLink. This tells it to generate
+                PostgreSQL-flavoured SQL (EclipseLink's equivalent of a Hibernate "dialect").
+            -->
+            <property name="eclipselink.target-database" value="PostgreSQL"/>
+
+            <!-- Log the SQL EclipseLink runs to the Payara server log (handy while learning) -->
+            <property name="eclipselink.logging.level.sql" value="FINE"/>
+            <property name="eclipselink.logging.parameters" value="true"/>
+        </properties>
+    </persistence-unit>
+</persistence>
