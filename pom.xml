@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.stokvault</groupId>
+    <artifactId>stokvault</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <!-- WAR = Web ARchive: the file format a Jakarta EE server like Payara deploys -->
+    <packaging>war</packaging>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Compile for Java 17 (sets both source and target) -->
+        <maven.compiler.release>17</maven.compiler.release>
+    </properties>
+
+    <dependencies>
+        <!--
+            The whole Jakarta EE 11 API (JAX-RS, CDI, EJB, JPA, JSON-B, Bean Validation...).
+            "provided" means: compile against it, but don't put it in the WAR,
+            because Payara already ships the real implementations.
+        -->
+        <dependency>
+            <groupId>jakarta.platform</groupId>
+            <artifactId>jakarta.jakartaee-api</artifactId>
+            <version>11.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!--
+            PostgreSQL JDBC driver.
+            The connection pool (jdbc/StokVaultDS) is created by Payara, not by this app,
+            so Payara needs the driver in its own lib folder (see README, "asadmin add-library").
+            It's "provided" so it isn't duplicated inside the WAR; Maven still downloads it
+            to your local repository, so you have the jar to hand to Payara.
+        -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.7</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Produces target/stokvault.war, which Payara serves at http://localhost:8080/stokvault -->
+        <finalName>stokvault</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
