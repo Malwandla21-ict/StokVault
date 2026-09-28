@@ -509,9 +509,10 @@ unit tests, uploads the WAR and the coverage report as artifacts, and builds the
 
 ## 12. Troubleshooting
 
-- **The old v1 tables** (`members`, `memberships`, `contributions`, `payouts`, `stokvels`) are still in the database,
-  unused. To remove them, run this in pgAdmin on the **stokvault** database:
-  `DROP TABLE IF EXISTS payouts, contributions, memberships, stokvels, members CASCADE;`
+- **Upgrading a v1 database:** v1 used the tables `members`, `memberships`, `contributions`, `payouts` and `stokvels`.
+  v2 doesn't use them (it has its own tables), so they can be removed. Run this in pgAdmin on the **stokvault**
+  database: `DROP TABLE IF EXISTS payouts, contributions, memberships, stokvels, members CASCADE;`
+  This has already been done on the development machine.
 - **`constraint ... already exists` warnings on every deploy** are harmless. EclipseLink's "create or extend" mode
   re-adds constraints and skips any that already exist.
 - **`column ... is of type uuid but expression is of type character varying`**: the connection pool is missing
