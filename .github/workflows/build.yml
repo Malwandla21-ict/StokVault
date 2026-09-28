@@ -1,0 +1,43 @@
+# CI (SDD 9.2): on every push and pull request, build the WAR, run the unit tests with coverage,
+# keep the WAR and coverage report as downloadable artifacts, and check the Docker image builds.
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build and run unit tests
+        run: mvn -B package
+
+      - name: Keep the WAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: stokvault-war
+          path: target/stokvault.war
+
+      - name: Keep the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the container image
+        run: docker build -f docker/Dockerfile -t stokvault:ci .

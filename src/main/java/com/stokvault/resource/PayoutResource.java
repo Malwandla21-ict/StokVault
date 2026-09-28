@@ -56,9 +56,11 @@ public class PayoutResource {
      */
     @POST
     @Path("/run")
-    public Response run(@PathParam("groupId") UUID groupId, @Valid PayoutRunRequest request) {
-        PayoutRunRequest body = request != null ? request : new PayoutRunRequest(null, null, null, null, null);
-        List<PayoutView> scheduled = payouts.run(groupId, body).stream().map(PayoutView::from).toList();
+    public Response run(@PathParam("groupId") UUID groupId, String body) {
+        // The body is optional (a rotational run needs no settings); the service validates it
+        PayoutRunRequest parsed = OptionalReason.parseBody(body, PayoutRunRequest.class);
+        PayoutRunRequest request = parsed != null ? parsed : new PayoutRunRequest(null, null, null, null, null);
+        List<PayoutView> scheduled = payouts.run(groupId, request).stream().map(PayoutView::from).toList();
         return Response.status(Response.Status.CREATED).entity(scheduled).build();
     }
 
@@ -99,7 +101,7 @@ public class PayoutResource {
     @POST
     @Path("/{payoutId}/cancel")
     public PayoutView cancel(@PathParam("groupId") UUID groupId, @PathParam("payoutId") UUID payoutId,
-                             @Valid OptionalReason body) {
-        return PayoutView.from(payouts.cancel(groupId, payoutId, OptionalReason.of(body)));
+                             String body) {
+        return PayoutView.from(payouts.cancel(groupId, payoutId, OptionalReason.parse(body)));
     }
 }

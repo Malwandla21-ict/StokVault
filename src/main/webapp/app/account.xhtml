@@ -1,0 +1,68 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough"
+                template="/WEB-INF/templates/layout.xhtml">
+    <ui:param name="nav" value="account"/>
+    <ui:define name="title">My account</ui:define>
+    <ui:define name="content">
+        <div class="page-head"><div><h1>My account</h1></div></div>
+
+        <h:panelGroup layout="block" styleClass="callout info" rendered="#{not accountBean.passwordSet}">
+            <strong>Welcome to StokVault!</strong> Choose a password so you can log in with your phone number
+            next time. (You can always use an SMS code instead.)
+        </h:panelGroup>
+
+        <div class="grid-2">
+            <section class="card">
+                <h2>#{accountBean.passwordSet ? 'Change password' : 'Choose a password'}</h2>
+                <h:form styleClass="form">
+                    <h:panelGroup layout="block" styleClass="field" rendered="#{accountBean.passwordSet}">
+                        <h:outputLabel for="cur" value="Current password"/>
+                        <h:inputSecret id="cur" value="#{accountBean.currentPassword}" pt:autocomplete="current-password"/>
+                    </h:panelGroup>
+                    <div class="field"><h:outputLabel for="new" value="New password"/>
+                        <h:inputSecret id="new" value="#{accountBean.newPassword}" pt:autocomplete="new-password"/>
+                        <div class="hint">At least 8 characters, with a letter and a number.</div></div>
+                    <div class="field"><h:outputLabel for="again" value="New password again"/>
+                        <h:inputSecret id="again" value="#{accountBean.confirmPassword}" pt:autocomplete="new-password"/></div>
+                    <h:commandButton value="Save password" action="#{accountBean.changePassword}" styleClass="btn primary"/>
+                </h:form>
+            </section>
+
+            <section class="card">
+                <h2>My details</h2>
+                <h:form styleClass="form">
+                    <div class="field"><h:outputLabel for="name" value="Full name"/><h:inputText id="name" value="#{accountBean.fullName}"/></div>
+                    <div class="field"><h:outputLabel for="phone" value="Mobile number (your login)"/><h:inputText id="phone" value="#{accountBean.phoneNumber}" pt:type="tel"/></div>
+                    <div class="field"><h:outputLabel for="email" value="Email (used if SMS fails)"/><h:inputText id="email" value="#{accountBean.email}" pt:type="email"/></div>
+                    <div class="field"><h:outputLabel for="ch" value="Send me messages by"/>
+                        <h:selectOneMenu id="ch" value="#{accountBean.preferredChannel}">
+                            <f:selectItems value="#{accountBean.channels}" var="c" itemLabel="#{fmt.label(c)}" itemValue="#{c}"/>
+                        </h:selectOneMenu></div>
+                    <p class="muted" style="margin:0">ID number: #{user.me.nationalIdMasked} (stored encrypted)</p>
+                    <h:commandButton value="Save details" action="#{accountBean.saveDetails}" styleClass="btn primary"/>
+                </h:form>
+            </section>
+        </div>
+
+        <h2 style="margin-top:24px">Messages sent to me</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>When</th><th>Channel</th><th>Status</th><th>Message</th></tr></thead>
+                <tbody>
+                <ui:repeat value="#{accountBean.notifications}" var="n">
+                    <tr>
+                        <td>#{fmt.dateTime(n.createdAt)}</td>
+                        <td>#{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</td>
+                        <td><span class="badge #{n.status eq 'SENT' ? 'good' : (n.status eq 'FAILED' ? 'danger' : 'warn')}">#{fmt.label(n.status)}</span></td>
+                        <td class="wrap">#{n.body}</td>
+                    </tr>
+                </ui:repeat>
+                </tbody>
+            </table>
+            <h:panelGroup rendered="#{empty accountBean.notifications}"><p class="empty">No messages yet.</p></h:panelGroup>
+        </div>
+    </ui:define>
+</ui:composition>

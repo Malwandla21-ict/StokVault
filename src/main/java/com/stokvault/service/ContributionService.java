@@ -26,6 +26,8 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -84,7 +86,7 @@ public class ContributionService {
     public record Recorded(Contribution contribution, boolean created) {
     }
 
-    public Recorded record(UUID groupId, ContributionRequest request) {
+    public Recorded record(UUID groupId, @Valid @NotNull ContributionRequest request) {
         StokvelGroup group = groups.find(groupId);
         groups.requireActive(group);
         Member caller = access.currentMember();
@@ -169,7 +171,7 @@ public class ContributionService {
         return new Recorded(contribution, true);
     }
 
-    public Contribution verify(UUID groupId, UUID contributionId, VerificationDecision decision) {
+    public Contribution verify(UUID groupId, UUID contributionId, @Valid @NotNull VerificationDecision decision) {
         StokvelGroup group = groups.find(groupId);
         Membership verifier = access.requireRole(group, MembershipRole.TREASURER, MembershipRole.COMMITTEE);
         Contribution contribution = find(group, contributionId);

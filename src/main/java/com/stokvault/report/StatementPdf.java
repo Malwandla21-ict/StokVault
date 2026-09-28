@@ -34,7 +34,10 @@ public final class StatementPdf {
     public static byte[] render(Statement statement) {
         List<Line> lines = new ArrayList<>();
         lines.add(new Line("F2", 15, statement.title(), 0));
-        statement.subtitle().forEach(s -> lines.add(new Line("F1", 9, s, 3)));
+        for (int i = 0; i < statement.subtitle().size(); i++) {
+            // extra space below the (larger) title
+            lines.add(new Line("F1", 9, statement.subtitle().get(i), i == 0 ? 10 : 3));
+        }
 
         int[] widths = columnWidths(statement);
         lines.add(new Line("F4", TABLE_FONT_SIZE, formatRow(statement.headers(), widths, statement), 14));

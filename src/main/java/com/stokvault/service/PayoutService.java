@@ -31,6 +31,8 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
@@ -135,7 +137,7 @@ public class PayoutService {
     }
 
     /** Initiate Payout: plans the payouts with the group type's rule and schedules them. */
-    public List<Payout> run(UUID groupId, PayoutRunRequest request) {
+    public List<Payout> run(UUID groupId, @Valid @NotNull PayoutRunRequest request) {
         StokvelGroup group = groups.findForUpdate(groupId);
         Membership treasurer = access.requireRole(group, MembershipRole.TREASURER);
         groups.requireActive(group);

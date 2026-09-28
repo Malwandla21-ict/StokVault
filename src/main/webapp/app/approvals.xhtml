@@ -1,0 +1,52 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough"
+                template="/WEB-INF/templates/layout.xhtml">
+    <!-- Committee dashboard (SDD 6.1): the payout approval queue (four-eyes principle) -->
+    <ui:param name="nav" value="approvals"/>
+    <ui:define name="title">Approvals</ui:define>
+    <ui:define name="content">
+        <div class="page-head">
+            <div>
+                <h1>Payouts waiting for your approval</h1>
+                <p>Payouts above a group's approval threshold need a second person: a committee member who isn't the
+                    treasurer who confirmed it, and isn't the recipient.</p>
+            </div>
+        </div>
+
+        <h:panelGroup layout="block" styleClass="callout good" rendered="#{empty approvalsBean.queue}">Nothing to approve right now.</h:panelGroup>
+
+        <h:form>
+            <div class="positions">
+                <ui:repeat value="#{approvalsBean.queue}" var="p">
+                    <article class="card">
+                        <div class="card-head">
+                            <div>
+                                <h2>#{fmt.rand(p.amount)} to #{p.memberName}</h2>
+                                <small><a href="group.xhtml?id=#{p.groupId}&amp;tab=payouts">Open the group's payouts</a></small>
+                            </div>
+                            <span class="badge warn">Pending approval</span>
+                        </div>
+                        <dl class="facts">
+                            <dt>Eligibility</dt><dd>#{fmt.label(p.eligibilityCheck)}</dd>
+                            <ui:fragment rendered="#{not empty p.overrideReason}"><dt>Override</dt><dd>#{p.overrideReason} (#{p.overriddenBy})</dd></ui:fragment>
+                            <dt>Initiated by</dt><dd>#{p.initiatedBy}</dd>
+                            <dt>Confirmed by</dt><dd>#{p.confirmedBy}</dd>
+                            <dt>Payout date</dt><dd>#{fmt.date(p.payoutDate)}</dd>
+                            <dt>Notes</dt><dd>#{p.notes}</dd>
+                        </dl>
+                        <div class="form" style="margin-top:14px">
+                            <ui:fragment rendered="#{approvalsBean.isOwn(p)}"><p class="muted">This payout is to you, so another committee member must approve it.</p></ui:fragment>
+                            <ui:fragment rendered="#{not approvalsBean.isOwn(p)}">
+                                <h:commandButton value="Approve" action="#{approvalsBean.approve(p)}" styleClass="btn primary"/>
+                                <h:inputText value="#{approvalsBean.reasons[p.id]}" pt:placeholder="Reason for declining" pt:aria-label="Reason for declining"/>
+                                <h:commandButton value="Decline" action="#{approvalsBean.decline(p)}" styleClass="btn danger"/>
+                            </ui:fragment>
+                        </div>
+                    </article>
+                </ui:repeat>
+            </div>
+        </h:form>
+    </ui:define>
+</ui:composition>

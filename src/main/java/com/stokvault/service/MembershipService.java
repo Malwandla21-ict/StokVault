@@ -20,6 +20,8 @@ import com.stokvault.security.Roles;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
@@ -76,7 +78,7 @@ public class MembershipService {
      * contribution cycle is open, a committee member must do it instead (SDD 4.1: "rejects
      * membership additions once a contribution cycle is active without Committee approval").
      */
-    public Membership add(UUID groupId, MembershipRequest request) {
+    public Membership add(UUID groupId, @Valid @NotNull MembershipRequest request) {
         StokvelGroup group = groups.find(groupId);
         if (group.getStatus() == GroupStatus.CLOSED) {
             throw new BusinessRuleException(group.getName() + " is closed");
@@ -123,7 +125,7 @@ public class MembershipService {
      * Role changes are made by the committee (they run the group's elections) or an admin;
      * payout positions can also be arranged by the treasurer.
      */
-    public Membership update(UUID groupId, UUID memberId, MembershipUpdate update) {
+    public Membership update(UUID groupId, UUID memberId, @Valid @NotNull MembershipUpdate update) {
         StokvelGroup group = groups.find(groupId);
         Membership membership = findActive(group, memberId);
         Map<String, Object> changes = new LinkedHashMap<>();

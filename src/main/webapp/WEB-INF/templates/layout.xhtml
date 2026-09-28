@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<!--
+    Page template (Facelets). Every page under /app uses it with <ui:composition template="...">
+    and fills the "content" slot. It lives in WEB-INF so it can't be requested directly.
+-->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:ui="jakarta.faces.facelets"
+      lang="en">
+<ui:insert name="metadata"/>
+<h:head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title><ui:insert name="title">StokVault</ui:insert> · StokVault</title>
+    <link rel="icon" href="#{request.contextPath}/resources/brand/favicon.ico" sizes="any"/>
+    <link rel="icon" href="#{request.contextPath}/resources/brand/stokvault-1a-favicon.svg" type="image/svg+xml"/>
+    <link rel="apple-touch-icon" href="#{request.contextPath}/resources/brand/apple-touch-icon.png"/>
+    <link rel="stylesheet" href="#{request.contextPath}/resources/css/stokvault.css?v=#{fmt.assetVersion}"/>
+</h:head>
+<h:body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="#{request.contextPath}/app/index.xhtml" aria-label="StokVault home">
+                <img class="logo-light" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal.svg" alt="StokVault"/>
+                <img class="logo-dark" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal-reversed.svg" alt="StokVault"/>
+            </a>
+            <nav class="nav" aria-label="Main">
+                <a href="#{request.contextPath}/app/index.xhtml" class="#{nav eq 'home' ? 'current' : ''}">My stokvels</a>
+                <ui:fragment rendered="#{user.committee}">
+                    <a href="#{request.contextPath}/app/approvals.xhtml" class="#{nav eq 'approvals' ? 'current' : ''}">Approvals</a>
+                </ui:fragment>
+                <ui:fragment rendered="#{user.admin}">
+                    <a href="#{request.contextPath}/app/admin.xhtml" class="#{nav eq 'admin' ? 'current' : ''}">Coop Office</a>
+                </ui:fragment>
+                <a href="#{request.contextPath}/app/account.xhtml" class="#{nav eq 'account' ? 'current' : ''}">My account</a>
+            </nav>
+            <div class="who">
+                <span>#{user.me.fullName}</span>
+                <h:form>
+                    <h:commandButton value="Log out" action="#{user.logout}" styleClass="btn small"/>
+                </h:form>
+            </div>
+        </div>
+    </header>
+
+    <main class="page">
+        <!-- Success and error messages from the last action -->
+        <h:messages globalOnly="true" styleClass="messages" infoClass="msg-info" errorClass="msg-error"/>
+        <ui:insert name="content"/>
+    </main>
+</h:body>
+</html>

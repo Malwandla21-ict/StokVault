@@ -1,0 +1,156 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough"
+                template="/WEB-INF/templates/layout.xhtml">
+    <!-- Coop Office (UMP) administration: platform-wide reports, onboarding groups and people -->
+    <ui:param name="nav" value="admin"/>
+    <ui:define name="title">Coop Office</ui:define>
+    <ui:define name="content">
+    <ui:fragment rendered="#{not user.admin}"><div class="callout danger">This page is for the Coop Office only.</div></ui:fragment>
+    <ui:fragment rendered="#{user.admin}">
+        <div class="page-head">
+            <div>
+                <h1>Coop Office</h1>
+                <p>Platform-wide view of every stokvel, onboarding, and background jobs.</p>
+            </div>
+            <h:form styleClass="row">
+                <h:commandButton value="Run eligibility check now" action="#{adminBean.runEligibility}" styleClass="btn"/>
+                <h:commandButton value="Send due reminders now" action="#{adminBean.sendReminders}" styleClass="btn"/>
+            </h:form>
+        </div>
+
+        <div class="stats">
+            <div class="stat"><div class="label">Stokvels</div><div class="value">#{adminBean.report.groups}</div></div>
+            <div class="stat"><div class="label">Active memberships</div><div class="value">#{adminBean.report.activeMembers}</div></div>
+            <div class="stat good"><div class="label">Money held</div><div class="value">#{fmt.rand(adminBean.report.totalBalance)}</div></div>
+            <div class="stat #{fmt.positive(adminBean.report.totalArrears) ? 'warn' : ''}"><div class="label">Arrears</div><div class="value">#{fmt.rand(adminBean.report.totalArrears)}</div></div>
+            <div class="stat"><div class="label">Awaiting verification</div><div class="value">#{adminBean.report.awaitingVerification}</div></div>
+            <div class="stat"><div class="label">Awaiting approval</div><div class="value">#{adminBean.report.payoutsAwaitingApproval}</div></div>
+        </div>
+
+        <h2>Stokvels</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th class="num">Members</th><th class="num">Balance</th><th class="num">Paid out</th><th class="num">Arrears</th><th class="num">Unverified</th><th>Audit chain</th></tr></thead>
+                <tbody>
+                <ui:repeat value="#{adminBean.report.rows}" var="r">
+                    <tr>
+                        <td><a href="group.xhtml?id=#{r.groupId}">#{r.name}</a></td>
+                        <td>#{fmt.label(r.type)}</td>
+                        <td><span class="badge #{r.status eq 'ACTIVE' ? 'good' : (r.status eq 'DRAFT' ? 'info' : 'warn')}">#{fmt.label(r.status)}</span></td>
+                        <td class="num">#{r.activeMembers}</td>
+                        <td class="num">#{fmt.rand(r.balance)}</td>
+                        <td class="num">#{fmt.rand(r.totalPaidOut)}</td>
+                        <td class="num">#{fmt.rand(r.arrears)}</td>
+                        <td class="num">#{r.awaitingVerification}</td>
+                        <td><span class="badge #{r.auditChainValid ? 'good' : 'danger'}">#{r.auditChainValid ? 'Intact' : 'BROKEN'}</span></td>
+                    </tr>
+                </ui:repeat>
+                </tbody>
+            </table>
+            <h:panelGroup rendered="#{empty adminBean.report.rows}"><p class="empty">No stokvels yet.</p></h:panelGroup>
+        </div>
+
+        <div class="grid-2" style="margin-top:24px">
+            <section class="card">
+                <h2>Register a stokvel</h2>
+                <h:form styleClass="form">
+                    <div class="field"><h:outputLabel for="gname" value="Name"/><h:inputText id="gname" value="#{adminBean.name}"/></div>
+                    <div class="field"><h:outputLabel for="gdesc" value="Description"/><h:inputText id="gdesc" value="#{adminBean.description}"/></div>
+                    <div class="field"><h:outputLabel for="gtype" value="Type"/>
+                        <h:selectOneMenu id="gtype" value="#{adminBean.type}">
+                            <f:selectItems value="#{adminBean.types}" var="t" itemLabel="#{fmt.label(t)}" itemValue="#{t}"/>
+                        </h:selectOneMenu></div>
+                    <div class="field"><h:outputLabel for="gamt" value="Contribution per cycle (R)"/>
+                        <h:inputText id="gamt" value="#{adminBean.contributionAmount}" pt:type="number" pt:step="0.01"/></div>
+                    <div class="field"><h:outputLabel for="gfreq" value="Frequency"/>
+                        <h:selectOneMenu id="gfreq" value="#{adminBean.frequency}">
+                            <f:selectItems value="#{adminBean.frequencies}" var="f" itemLabel="#{fmt.label(f)}" itemValue="#{f}"/>
+                        </h:selectOneMenu></div>
+                    <div class="field"><h:outputLabel for="gstart" value="First due date"/>
+                        <h:inputText id="gstart" value="#{adminBean.startDate}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                    <div class="field"><h:outputLabel for="gthr" value="Approval threshold (R)"/>
+                        <h:inputText id="gthr" value="#{adminBean.approvalThreshold}" pt:type="number" pt:step="0.01"/></div>
+                    <div class="field"><h:outputLabel for="gcomp" value="Required cycle completion (%)"/>
+                        <h:inputText id="gcomp" value="#{adminBean.completionThreshold}" pt:type="number" pt:min="1" pt:max="100"/></div>
+                    <div class="field"><h:outputLabel for="gben" value="Burial benefit (R, burial societies only)"/>
+                        <h:inputText id="gben" value="#{adminBean.benefitAmount}" pt:type="number" pt:step="0.01"/></div>
+                    <h:commandButton value="Create as draft" action="#{adminBean.createGroup}" styleClass="btn primary"/>
+                </h:form>
+            </section>
+
+            <section class="card">
+                <h2>Register a person</h2>
+                <h:form styleClass="form">
+                    <div class="field"><h:outputLabel for="pname" value="Full name"/><h:inputText id="pname" value="#{adminBean.regName}"/></div>
+                    <div class="field"><h:outputLabel for="pid" value="SA ID number"/><h:inputText id="pid" value="#{adminBean.regNationalId}" pt:inputmode="numeric" pt:maxlength="13"/></div>
+                    <div class="field"><h:outputLabel for="pphone" value="Mobile number"/><h:inputText id="pphone" value="#{adminBean.regPhone}" pt:type="tel"/></div>
+                    <div class="field"><h:outputLabel for="pemail" value="Email (optional)"/><h:inputText id="pemail" value="#{adminBean.regEmail}" pt:type="email"/></div>
+                    <div class="field"><h:outputLabel for="pch" value="Send messages by"/>
+                        <h:selectOneMenu id="pch" value="#{adminBean.regChannel}">
+                            <f:selectItems value="#{adminBean.channels}" var="c" itemLabel="#{fmt.label(c)}" itemValue="#{c}"/>
+                        </h:selectOneMenu></div>
+                    <label class="check"><h:selectBooleanCheckbox value="#{adminBean.regConsent}"/>
+                        <span>The person has consented to StokVault processing their personal information (POPIA).</span></label>
+                    <h:commandButton value="Register" action="#{adminBean.register}" styleClass="btn primary"/>
+                </h:form>
+            </section>
+        </div>
+
+        <h2 style="margin-top:24px">People</h2>
+        <h:form styleClass="row" style="margin-bottom:10px">
+            <h:inputText value="#{adminBean.peopleSearch}" pt:type="search" pt:placeholder="Search name or phone" style="max-width:320px"/>
+            <h:commandButton value="Search" action="#{adminBean.filter}" styleClass="btn"/>
+        </h:form>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>ID number</th><th>Messages by</th><th>Password set</th><th>Registered</th></tr></thead>
+                <tbody>
+                <ui:repeat value="#{adminBean.people}" var="m">
+                    <tr>
+                        <td>#{m.fullName}<ui:fragment rendered="#{m.admin}"> <span class="badge info">Admin</span></ui:fragment></td>
+                        <td>#{m.phoneNumber}</td>
+                        <td>#{m.email}</td>
+                        <td class="hash">#{m.nationalIdMasked}</td>
+                        <td>#{fmt.label(m.preferredChannel)}</td>
+                        <td>#{m.passwordSet ? 'Yes' : 'Not yet'}</td>
+                        <td>#{fmt.dateTime(m.createdAt)}</td>
+                    </tr>
+                </ui:repeat>
+                </tbody>
+            </table>
+        </div>
+
+        <h2 style="margin-top:24px">Notification log</h2>
+        <h:form styleClass="row" style="margin-bottom:10px">
+            <h:selectOneMenu value="#{adminBean.notificationFilter}" style="max-width:220px">
+                <f:selectItem itemLabel="All" itemValue="#{null}"/>
+                <f:selectItems value="#{adminBean.notificationStatuses}" var="s" itemLabel="#{fmt.label(s)}" itemValue="#{s}"/>
+            </h:selectOneMenu>
+            <h:commandButton value="Filter" action="#{adminBean.filter}" styleClass="btn"/>
+            <small>FAILED messages went to the dead-letter queue after 3 attempts and need follow-up.</small>
+        </h:form>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>When</th><th>To</th><th>Type</th><th>Channel</th><th>Status</th><th class="num">Attempts</th><th>Message</th></tr></thead>
+                <tbody>
+                <ui:repeat value="#{adminBean.notifications}" var="n">
+                    <tr>
+                        <td>#{fmt.dateTime(n.createdAt)}</td>
+                        <td>#{n.memberName}<span class="sub">#{n.groupName}</span></td>
+                        <td>#{fmt.label(n.type)}</td>
+                        <td>#{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</td>
+                        <td><span class="badge #{n.status eq 'SENT' ? 'good' : (n.status eq 'FAILED' ? 'danger' : 'warn')}">#{fmt.label(n.status)}</span>
+                            <ui:fragment rendered="#{not empty n.lastError}"><span class="sub">#{n.lastError}</span></ui:fragment></td>
+                        <td class="num">#{n.attempts}</td>
+                        <td class="wrap">#{n.body}</td>
+                    </tr>
+                </ui:repeat>
+                </tbody>
+            </table>
+        </div>
+    </ui:fragment>
+    </ui:define>
+</ui:composition>

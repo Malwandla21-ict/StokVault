@@ -1,0 +1,36 @@
+# StokVault with its PostgreSQL database, for staging or a pilot server:
+#
+#   1. Create a file named .env next to this one containing:   DB_PASSWORD=choose-a-strong-password
+#   2. docker compose up --build
+#   3. Open http://localhost:8080/stokvault/ . The first admin's password is printed in the log:
+#        docker compose logs app | grep "generated password"
+#
+# Data lives in the "db-data" volume, so it survives restarts and rebuilds.
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: stokvault
+      POSTGRES_USER: stokvault
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in a .env file}
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stokvault -d stokvault"]
+      interval: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in a .env file}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

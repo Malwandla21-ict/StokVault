@@ -89,8 +89,8 @@ public class GroupResource {
 
     @POST
     @Path("/{id}/suspend")
-    public GroupView suspend(@PathParam("id") UUID id, @Valid OptionalReason body) {
-        return groups.view(groups.suspend(id, OptionalReason.of(body)));
+    public GroupView suspend(@PathParam("id") UUID id, String body) {
+        return groups.view(groups.suspend(id, OptionalReason.parse(body)));
     }
 
     @POST
@@ -101,8 +101,8 @@ public class GroupResource {
 
     @POST
     @Path("/{id}/close")
-    public GroupView close(@PathParam("id") UUID id, @Valid OptionalReason body) {
-        return groups.view(groups.close(id, OptionalReason.of(body)));
+    public GroupView close(@PathParam("id") UUID id, String body) {
+        return groups.view(groups.close(id, OptionalReason.parse(body)));
     }
 
     /** Balance, totals, current cycle, next rotation payout and member standings. */

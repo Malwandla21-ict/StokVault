@@ -1,0 +1,78 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                template="/WEB-INF/templates/layout.xhtml">
+    <!-- Member dashboard (SDD 6.1): my position in each of my stokvels -->
+    <ui:param name="nav" value="home"/>
+    <ui:define name="title">My stokvels</ui:define>
+    <ui:define name="content">
+        <div class="page-head">
+            <div>
+                <h1>Hello, #{user.firstName}</h1>
+                <p>Your contributions, what you owe and when your payout is due.</p>
+            </div>
+        </div>
+
+        <h:panelGroup layout="block" styleClass="callout info" rendered="#{empty dashboardBean.positions and not user.admin}">
+            You're not in any stokvel yet. Ask your group's treasurer to add you.
+        </h:panelGroup>
+
+        <div class="positions">
+            <ui:repeat value="#{dashboardBean.positions}" var="p">
+                <article class="card position">
+                    <div class="card-head">
+                        <div>
+                            <h2><a href="group.xhtml?id=#{p.groupId}">#{p.groupName}</a></h2>
+                            <small>#{fmt.label(p.type)} stokvel</small>
+                        </div>
+                        <span class="badge #{p.role eq 'MEMBER' ? '' : 'good'}">#{fmt.label(p.role)}</span>
+                    </div>
+                    <dl class="facts">
+                        <dt>You've paid in</dt><dd>#{fmt.rand(p.myVerifiedTotal)}</dd>
+                        <dt>Arrears</dt>
+                        <dd style="color:#{fmt.positive(p.myArrears) ? 'var(--warn)' : 'inherit'}">#{fmt.rand(p.myArrears)}</dd>
+                        <dt>Received so far</dt><dd>#{fmt.rand(p.myReceived)}</dd>
+                        <dt>Group balance</dt><dd>#{fmt.rand(p.groupBalance)}</dd>
+                        <ui:fragment rendered="#{p.currentCycleDue ne null}">
+                            <dt>This cycle</dt>
+                            <dd>#{fmt.rand(p.currentCycleAmount)} due #{fmt.date(p.currentCycleDue)}
+                                <span class="badge #{p.paidCurrentCycle ? 'good' : 'warn'}">#{p.paidCurrentCycle ? 'Paid' : 'Not paid yet'}</span>
+                            </dd>
+                        </ui:fragment>
+                        <ui:fragment rendered="#{p.myAwaitingVerification gt 0}">
+                            <dt>Awaiting check</dt><dd>#{p.myAwaitingVerification} payment(s)</dd>
+                        </ui:fragment>
+                    </dl>
+                    <ui:fragment rendered="#{p.queuePosition ne null}">
+                        <div class="turn">
+                            #{p.queuePosition eq 1 ? 'You are next in the rotation' : 'You are number ' += p.queuePosition += ' in line'}
+                            · around #{fmt.date(p.nextPayoutEstimate)}
+                        </div>
+                    </ui:fragment>
+                    <p style="margin:14px 0 0"><a class="btn small" href="group.xhtml?id=#{p.groupId}">Open</a></p>
+                </article>
+            </ui:repeat>
+        </div>
+
+        <ui:fragment rendered="#{user.admin}">
+            <h2>All stokvels on the platform</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Name</th><th>Type</th><th>Status</th><th class="num">Contribution</th><th>Frequency</th></tr></thead>
+                    <tbody>
+                    <ui:repeat value="#{dashboardBean.allGroups}" var="g">
+                        <tr>
+                            <td><a href="group.xhtml?id=#{g.id}">#{g.name}</a></td>
+                            <td>#{fmt.label(g.type)}</td>
+                            <td><span class="badge #{g.status eq 'ACTIVE' ? 'good' : (g.status eq 'DRAFT' ? 'info' : 'warn')}">#{fmt.label(g.status)}</span></td>
+                            <td class="num">#{fmt.rand(g.contributionAmount)}</td>
+                            <td>#{fmt.label(g.frequency)}</td>
+                        </tr>
+                    </ui:repeat>
+                    </tbody>
+                </table>
+                <h:panelGroup rendered="#{empty dashboardBean.allGroups}"><p class="empty">No stokvels yet. Register one under Coop Office.</p></h:panelGroup>
+            </div>
+        </ui:fragment>
+    </ui:define>
+</ui:composition>
