@@ -5,14 +5,11 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
- * JSON body for adding a member to a stokvel, e.g. {"memberId":3,"role":"TREASURER"}.
- * role defaults to MEMBER and joinedOn to today. Set joinedOn to an earlier date
- * when capturing an existing stokvel's history.
+ * Adding a registered member to a group, e.g. {"memberId":"...","role":"TREASURER"}.
+ * role defaults to MEMBER and joinedDate to today.
  */
-public record MembershipRequest(
-        @NotNull Long memberId,
-        MembershipRole role,
-        @PastOrPresent LocalDate joinedOn) {
+public record MembershipRequest(@NotNull UUID memberId, MembershipRole role, @PastOrPresent LocalDate joinedDate) {
 }

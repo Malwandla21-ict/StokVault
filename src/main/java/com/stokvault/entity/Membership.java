@@ -1,6 +1,7 @@
 package com.stokvault.entity;
 
 import com.stokvault.domain.MembershipRole;
+import com.stokvault.domain.MembershipStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,36 +11,32 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
- * Links a Member to a Stokvel: their role, their place in the payout order, and when they
- * joined or left. Leaving sets leftOn instead of deleting the row, so their contribution
- * history stays intact.
+ * A member's place in one group: their role, payout position and status (SDD 5.2 "Membership").
+ * Leaving a group sets status INACTIVE instead of deleting the row, so history stays intact.
  */
 @Entity
-// uniqueConstraints: a member can have at most one membership row per stokvel
-@Table(name = "memberships",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"stokvel_id", "member_id"}))
+@Table(name = "group_memberships", uniqueConstraints = @UniqueConstraint(columnNames = {"group_id", "member_id"}))
 public class Membership {
 
     @Id
-    @SequenceGenerator(name = "membership_seq", sequenceName = "memberships_id_seq", allocationSize = 1)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "membership_seq")
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "membership_id")
+    private UUID id;
 
-    // @ManyToOne: many memberships point to one stokvel. In the database this is a
-    // foreign-key column, named by @JoinColumn. optional = false means it's required.
-    // Loading a Membership also loads its Stokvel (ManyToOne is fetched eagerly by default).
+    // @ManyToOne: many memberships point at one group. In the database this is a foreign-key
+    // column named by @JoinColumn. It's loaded together with the membership (eager by default).
     @NotNull
     @ManyToOne(optional = false)
-    @JoinColumn(name = "stokvel_id", nullable = false)
-    private Stokvel stokvel;
+    @JoinColumn(name = "group_id", nullable = false)
+    private StokvelGroup group;
 
     @NotNull
     @ManyToOne(optional = false)
@@ -51,27 +48,32 @@ public class Membership {
     @Column(nullable = false, length = 20)
     private MembershipRole role = MembershipRole.MEMBER;
 
-    // 1 = first in line for a payout in a ROTATING stokvel
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private MembershipStatus status = MembershipStatus.ACTIVE;
+
+    // 1 = first in line for a rotational payout
     @Column(name = "payout_position", nullable = false)
     private int payoutPosition;
 
     @NotNull
-    @Column(name = "joined_on", nullable = false)
-    private LocalDate joinedOn;
+    @Column(name = "joined_date", nullable = false)
+    private LocalDate joinedDate;
 
-    @Column(name = "left_on")
-    private LocalDate leftOn;
+    @Column(name = "left_date")
+    private LocalDate leftDate;
 
-    public Long getId() {
+    public UUID getId() {
         return id;
     }
 
-    public Stokvel getStokvel() {
-        return stokvel;
+    public StokvelGroup getGroup() {
+        return group;
     }
 
-    public void setStokvel(Stokvel stokvel) {
-        this.stokvel = stokvel;
+    public void setGroup(StokvelGroup group) {
+        this.group = group;
     }
 
     public Member getMember() {
@@ -90,6 +92,14 @@ public class Membership {
         this.role = role;
     }
 
+    public MembershipStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(MembershipStatus status) {
+        this.status = status;
+    }
+
     public int getPayoutPosition() {
         return payoutPosition;
     }
@@ -98,23 +108,23 @@ public class Membership {
         this.payoutPosition = payoutPosition;
     }
 
-    public LocalDate getJoinedOn() {
-        return joinedOn;
+    public LocalDate getJoinedDate() {
+        return joinedDate;
     }
 
-    public void setJoinedOn(LocalDate joinedOn) {
-        this.joinedOn = joinedOn;
+    public void setJoinedDate(LocalDate joinedDate) {
+        this.joinedDate = joinedDate;
     }
 
-    public LocalDate getLeftOn() {
-        return leftOn;
+    public LocalDate getLeftDate() {
+        return leftDate;
     }
 
-    public void setLeftOn(LocalDate leftOn) {
-        this.leftOn = leftOn;
+    public void setLeftDate(LocalDate leftDate) {
+        this.leftDate = leftDate;
     }
 
     public boolean isActive() {
-        return leftOn == null;
+        return status == MembershipStatus.ACTIVE;
     }
 }

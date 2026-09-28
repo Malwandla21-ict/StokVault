@@ -11,9 +11,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 
 /**
- * Lets resource methods take dates from the URL, e.g. {@code @QueryParam("from") LocalDate from}
- * with {@code ?from=2026-06-01}. JAX-RS can only convert text to types that have a
- * valueOf(String), fromString(String) or String constructor, which LocalDate doesn't.
+ * Lets resource methods take dates from the URL, e.g. ?from=2026-06-01. JAX-RS can only convert
+ * text to types with a valueOf/fromString method or a String constructor, which LocalDate lacks.
  */
 @Provider
 public class LocalDateParamConverterProvider implements ParamConverterProvider {
@@ -22,7 +21,7 @@ public class LocalDateParamConverterProvider implements ParamConverterProvider {
     @SuppressWarnings("unchecked")
     public <T> ParamConverter<T> getConverter(Class<T> rawType, Type genericType, Annotation[] annotations) {
         if (rawType != LocalDate.class) {
-            return null; // not ours; let JAX-RS use its normal conversion
+            return null;
         }
         return (ParamConverter<T>) new ParamConverter<LocalDate>() {
             @Override

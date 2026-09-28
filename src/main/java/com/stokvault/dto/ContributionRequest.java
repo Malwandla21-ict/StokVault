@@ -2,6 +2,7 @@ package com.stokvault.dto;
 
 import com.stokvault.domain.PaymentMethod;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Positive;
@@ -9,16 +10,19 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
- * JSON body for recording a contribution, e.g.
- * {"memberId":3,"amount":500,"contributionDate":"2026-09-01","paymentMethod":"EFT","reference":"SEP-THANDI"}.
- * contributionDate defaults to today and paymentMethod to CASH.
+ * Recording a contribution, e.g.
+ * {"memberId":"...","amount":500,"paymentReference":"FNB-778812","paymentMethod":"EFT"}.
+ * memberId defaults to yourself (a member reporting their own payment), cycleId to the group's
+ * open cycle, contributionDate to today and paymentMethod to EFT.
  */
 public record ContributionRequest(
-        @NotNull Long memberId,
-        @NotNull @Positive @Digits(integer = 10, fraction = 2) BigDecimal amount,
-        @PastOrPresent LocalDate contributionDate,
+        UUID memberId,
+        UUID cycleId,
+        @NotNull @Positive @Digits(integer = 8, fraction = 2) BigDecimal amount,
+        @NotBlank @Size(max = 50) String paymentReference,
         PaymentMethod paymentMethod,
-        @Size(max = 100) String reference) {
+        @PastOrPresent LocalDate contributionDate) {
 }

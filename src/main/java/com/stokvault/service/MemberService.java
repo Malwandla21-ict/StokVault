@@ -1,106 +1,199 @@
 package com.stokvault.service;
 
-import com.stokvault.dto.MemberRequest;
+import com.stokvault.domain.MembershipRole;
+import com.stokvault.domain.MembershipStatus;
+import com.stokvault.domain.NotificationChannel;
+import com.stokvault.domain.PhoneNumbers;
+import com.stokvault.domain.SaIdNumber;
+import com.stokvault.dto.MemberRegistration;
+import com.stokvault.dto.MemberUpdate;
 import com.stokvault.entity.Member;
 import com.stokvault.entity.Membership;
+import com.stokvault.exception.AccessDeniedException;
 import com.stokvault.exception.BusinessRuleException;
+import com.stokvault.exception.InvalidRequestException;
 import com.stokvault.exception.ResourceNotFoundException;
+import com.stokvault.security.AccessControl;
+import com.stokvault.security.FieldCrypto;
+import com.stokvault.security.PasswordHasher;
+import com.stokvault.security.Roles;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
+import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 /**
- * Business logic for members. REST resources call this; this talks to the database.
+ * Registering people and managing their details.
  */
-// @Stateless: makes this an EJB (Enterprise Java Bean) session bean.
-//  - The server creates and pools instances; you never call "new MemberService()".
-//  - It keeps no per-client state between calls, so any instance can serve any request.
-//  - Every public method automatically runs in a database transaction: it commits
-//    when the method returns normally and rolls back if it throws an unchecked exception.
+// @Stateless: a pooled EJB; every public method runs in a container-managed transaction.
+// @RolesAllowed: the container refuses callers without one of these roles (EJBAccessException -> 403).
 @Stateless
+@RolesAllowed(Roles.MEMBER)
 public class MemberService {
 
-    // @PersistenceContext: the server injects an EntityManager connected to the
-    // "StokVaultPU" unit from persistence.xml. EntityManager is the JPA object
-    // you use to save, load and delete entities.
     @PersistenceContext(unitName = "StokVaultPU")
     private EntityManager em;
 
-    /** All members, or those whose name or email contains {@code search}. */
-    public List<Member> findAll(String search) {
-        if (search == null || search.isBlank()) {
-            // A named query, declared with @NamedQuery on the Member entity
-            return em.createNamedQuery("Member.findAll", Member.class).getResultList();
+    @Inject
+    private AccessControl access;
+
+    @Inject
+    private PasswordHasher hasher;
+
+    /**
+     * Registers a person (Coop Office admins and group officers can do this). They get no
+     * password: they sign in the first time with an SMS code and then choose one.
+     */
+    @RolesAllowed({Roles.ADMIN, Roles.TREASURER, Roles.COMMITTEE})
+    public Member register(MemberRegistration registration) {
+        String nationalId = registration.nationalId().trim();
+        if (!SaIdNumber.isValid(nationalId)) {
+            throw new InvalidRequestException(SaIdNumber.mask(nationalId) + " is not a valid South African ID number");
         }
-        // An inline JPQL query. :pattern is a named parameter filled in by setParameter,
-        // which also protects against SQL injection (never concatenate user input into JPQL).
-        return em.createQuery("""
-                        SELECT m FROM Member m
-                        WHERE LOWER(m.name) LIKE :pattern OR LOWER(m.email) LIKE :pattern
-                        ORDER BY m.name""", Member.class)
-                .setParameter("pattern", "%" + search.trim().toLowerCase(Locale.ROOT) + "%")
-                .getResultList();
+        String phone = requirePhone(registration.phoneNumber());
+        String idHash = FieldCrypto.get().lookupHash(nationalId);
+
+        if (findByPhone(phone) != null) {
+            throw new BusinessRuleException("A member with phone number " + PhoneNumbers.display(phone) + " is already registered");
+        }
+        if (!em.createQuery("SELECT m FROM Member m WHERE m.nationalIdHash = :hash", Member.class)
+                .setParameter("hash", idHash).getResultList().isEmpty()) {
+            throw new BusinessRuleException("A member with this ID number is already registered");
+        }
+
+        Member member = new Member();
+        member.setFullName(registration.fullName().trim());
+        member.setNationalId(nationalId);
+        member.setNationalIdHash(idHash);
+        member.setPhoneNumber(phone);
+        member.setEmail(normaliseEmail(registration.email()));
+        member.setPreferredChannel(registration.preferredChannel() == null
+                ? NotificationChannel.SMS : registration.preferredChannel());
+        member.setPasswordHash(hasher.unusableHash());
+        member.setPasswordSet(false);
+        member.setPopiaConsentAt(LocalDateTime.now());
+        em.persist(member);
+        return member;
     }
 
-    public Member find(Long id) {
-        // find() looks a row up by primary key and returns null when there isn't one
+    /**
+     * Admins can search everyone by name or phone. Group officers can only look a person up by
+     * their exact phone number or ID number (to add them to their group), so they can't browse
+     * other stokvels' members.
+     */
+    @RolesAllowed({Roles.ADMIN, Roles.TREASURER, Roles.COMMITTEE})
+    public List<Member> search(String query) {
+        String q = query == null ? "" : query.trim();
+        if (access.isAdmin()) {
+            if (q.isEmpty()) {
+                return em.createQuery("SELECT m FROM Member m ORDER BY m.fullName", Member.class)
+                        .setMaxResults(200).getResultList();
+            }
+            String phone = PhoneNumbers.normalise(q);
+            return em.createQuery("""
+                            SELECT m FROM Member m
+                            WHERE LOWER(m.fullName) LIKE :pattern OR m.phoneNumber = :phone
+                            ORDER BY m.fullName""", Member.class)
+                    .setParameter("pattern", "%" + q.toLowerCase(Locale.ROOT) + "%")
+                    .setParameter("phone", phone == null ? "" : phone)
+                    .setMaxResults(200)
+                    .getResultList();
+        }
+        String phone = PhoneNumbers.normalise(q);
+        if (phone != null) {
+            Member byPhone = findByPhone(phone);
+            return byPhone == null ? List.of() : List.of(byPhone);
+        }
+        if (SaIdNumber.isValid(q)) {
+            return em.createQuery("SELECT m FROM Member m WHERE m.nationalIdHash = :hash", Member.class)
+                    .setParameter("hash", FieldCrypto.get().lookupHash(q))
+                    .getResultList();
+        }
+        throw new InvalidRequestException("Search by the person's exact phone number or ID number");
+    }
+
+    /** Yourself, anyone if you're an admin, or members of groups where you're an officer. */
+    public Member find(UUID id) {
         Member member = em.find(Member.class, id);
-        if (member == null) {
+        if (member == null || !canSee(member)) {
             throw new ResourceNotFoundException("Member " + id + " not found");
         }
         return member;
     }
 
-    public Member create(MemberRequest request) {
-        Member member = new Member();
-        apply(member, request);
-        em.persist(member); // INSERT happens when the transaction commits; the id is assigned now
-        return member;
+    public Member me() {
+        return access.currentMember();
     }
 
-    public Member update(Long id, MemberRequest request) {
+    /** Members update their own contact details; admins can update anyone's. */
+    public Member update(UUID id, MemberUpdate update) {
         Member member = find(id);
-        // member is "managed": JPA tracks changes to it and writes an UPDATE on commit
-        apply(member, request);
-        return member;
-    }
-
-    public void delete(Long id) {
-        Member member = find(id);
-        Long memberships = em.createQuery(
-                        "SELECT COUNT(ms) FROM Membership ms WHERE ms.member = :member", Long.class)
-                .setParameter("member", member)
-                .getSingleResult();
-        if (memberships > 0) {
-            throw new BusinessRuleException(member.getName()
-                    + " belongs to a stokvel, so their record is kept for the stokvel's history");
+        if (!access.isAdmin() && !member.getId().equals(access.currentMember().getId())) {
+            throw new AccessDeniedException("You can only change your own details");
         }
-        em.remove(member);
+        String phone = requirePhone(update.phoneNumber());
+        Member samePhone = findByPhone(phone);
+        if (samePhone != null && !samePhone.getId().equals(member.getId())) {
+            throw new BusinessRuleException("Phone number " + PhoneNumbers.display(phone) + " belongs to another member");
+        }
+        member.setFullName(update.fullName().trim());
+        member.setPhoneNumber(phone);
+        member.setEmail(normaliseEmail(update.email()));
+        if (update.preferredChannel() != null) {
+            member.setPreferredChannel(update.preferredChannel());
+        }
+        return member;
     }
 
-    /** Every stokvel this member belongs to (or used to). */
-    public List<Membership> memberships(Long id) {
-        Member member = find(id);
-        return em.createQuery(
-                        "SELECT ms FROM Membership ms WHERE ms.member = :member ORDER BY ms.stokvel.name",
-                        Membership.class)
+    /** The groups a member belongs (or belonged) to. */
+    public List<Membership> memberships(UUID memberId) {
+        Member member = find(memberId);
+        return em.createQuery("SELECT ms FROM Membership ms WHERE ms.member = :member ORDER BY ms.group.name", Membership.class)
                 .setParameter("member", member)
                 .getResultList();
     }
 
-    private void apply(Member member, MemberRequest request) {
-        String email = request.email().trim().toLowerCase(Locale.ROOT);
-        List<Member> sameEmail = em.createQuery("SELECT m FROM Member m WHERE m.email = :email", Member.class)
-                .setParameter("email", email)
-                .getResultList();
-        if (sameEmail.stream().anyMatch(other -> !other.getId().equals(member.getId()))) {
-            throw new BusinessRuleException("A member with email " + email + " already exists");
+    private boolean canSee(Member member) {
+        if (access.isAdmin()) {
+            return true;
         }
-        member.setName(request.name().trim());
-        member.setEmail(email);
-        member.setPhone(request.phone() == null || request.phone().isBlank() ? null : request.phone().trim());
+        UUID me = access.currentMemberId().orElse(null);
+        if (member.getId().equals(me)) {
+            return true;
+        }
+        // Officers see the members of their own groups
+        return em.createQuery("""
+                        SELECT COUNT(mine) FROM Membership mine, Membership theirs
+                        WHERE mine.group = theirs.group AND mine.member.id = :me AND theirs.member = :member
+                          AND mine.status = :active AND mine.role IN :officerRoles""", Long.class)
+                .setParameter("me", me)
+                .setParameter("member", member)
+                .setParameter("active", MembershipStatus.ACTIVE)
+                .setParameter("officerRoles", List.of(MembershipRole.TREASURER, MembershipRole.COMMITTEE))
+                .getSingleResult() > 0;
+    }
+
+    private Member findByPhone(String normalisedPhone) {
+        return em.createQuery("SELECT m FROM Member m WHERE m.phoneNumber = :phone", Member.class)
+                .setParameter("phone", normalisedPhone)
+                .getResultStream().findFirst().orElse(null);
+    }
+
+    private static String requirePhone(String input) {
+        String phone = PhoneNumbers.normalise(input);
+        if (phone == null) {
+            throw new InvalidRequestException("'" + input + "' is not a valid South African phone number");
+        }
+        return phone;
+    }
+
+    private static String normaliseEmail(String email) {
+        return email == null || email.isBlank() ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 }

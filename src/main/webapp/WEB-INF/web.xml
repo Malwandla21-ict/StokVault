@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Web application settings: the Faces servlet, which URLs need a login, and sessions.
+-->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_6_1.xsd"
+         version="6.1">
+
+    <display-name>StokVault</display-name>
+
+    <!-- Jakarta Faces: pages are .xhtml files (Facelets) -->
+    <servlet>
+        <servlet-name>Faces Servlet</servlet-name>
+        <servlet-class>jakarta.faces.webapp.FacesServlet</servlet-class>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>Faces Servlet</servlet-name>
+        <url-pattern>*.xhtml</url-pattern>
+    </servlet-mapping>
+
+    <!-- Development shows detailed Faces errors; use Production for the pilot deployment -->
+    <context-param>
+        <param-name>jakarta.faces.PROJECT_STAGE</param-name>
+        <param-value>Production</param-value>
+    </context-param>
+    <!-- Trim form input; treat an empty text field as null -->
+    <context-param>
+        <param-name>jakarta.faces.INTERPRET_EMPTY_STRING_SUBMITTED_VALUES_AS_NULL</param-name>
+        <param-value>true</param-value>
+    </context-param>
+
+    <welcome-file-list>
+        <welcome-file>app/index.xhtml</welcome-file>
+    </welcome-file-list>
+
+    <!--
+        Which URLs need a logged-in user. "**" means any authenticated user; finer role checks
+        happen in the EJBs (@RolesAllowed) and per group (AccessControl).
+        StokVaultAuthenticationMechanism decides HOW to log in: a login page for /app, HTTP Basic for /api.
+    -->
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>Dashboards and API</web-resource-name>
+            <url-pattern>/app/*</url-pattern>
+            <url-pattern>/api/*</url-pattern>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>**</role-name>
+        </auth-constraint>
+        <!--
+            SDD 6.4 (HTTPS only). Enable for staging/production, where Payara has a real TLS
+            certificate: uncomment this, and set <secure>true</secure> in cookie-config below.
+            Left off for local development, where HTTPS would use a self-signed certificate.
+        <user-data-constraint>
+            <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+        </user-data-constraint>
+        -->
+    </security-constraint>
+    <!-- Public: health check, requesting a login code, the login page and static files -->
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>Public</web-resource-name>
+            <url-pattern>/api/health</url-pattern>
+            <url-pattern>/api/auth/*</url-pattern>
+            <url-pattern>/login.xhtml</url-pattern>
+            <url-pattern>/jakarta.faces.resource/*</url-pattern>
+            <url-pattern>/resources/*</url-pattern>
+        </web-resource-collection>
+    </security-constraint>
+
+    <security-role>
+        <role-name>ADMIN</role-name>
+    </security-role>
+    <security-role>
+        <role-name>TREASURER</role-name>
+    </security-role>
+    <security-role>
+        <role-name>COMMITTEE</role-name>
+    </security-role>
+    <security-role>
+        <role-name>MEMBER</role-name>
+    </security-role>
+
+    <session-config>
+        <!-- Minutes of inactivity before being logged out -->
+        <session-timeout>30</session-timeout>
+        <cookie-config>
+            <!-- JavaScript can't read the session cookie -->
+            <http-only>true</http-only>
+            <!-- true in production (cookie only sent over HTTPS) -->
+            <secure>false</secure>
+        </cookie-config>
+        <tracking-mode>COOKIE</tracking-mode>
+    </session-config>
+
+    <error-page>
+        <exception-type>jakarta.faces.application.ViewExpiredException</exception-type>
+        <location>/login.xhtml?expired=true</location>
+    </error-page>
+</web-app>

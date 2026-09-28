@@ -1,14 +1,14 @@
 package com.stokvault.resource;
 
-import com.stokvault.dto.MemberRequest;
-import com.stokvault.dto.MemberResponse;
-import com.stokvault.dto.MembershipResponse;
+import com.stokvault.dto.MemberRegistration;
+import com.stokvault.dto.MemberUpdate;
+import com.stokvault.dto.MemberView;
+import com.stokvault.dto.MembershipView;
 import com.stokvault.service.MemberService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
@@ -21,71 +21,53 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
-import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 
 /**
- * REST endpoints for members, served under /stokvault/api/members.
- * This class only deals with HTTP; the real work is in MemberService.
+ * Registered people: /api/members
+ * (Joining a group is done under /api/groups/{groupId}/members.)
  */
+// @Path: the URL, relative to @ApplicationPath("/api"). @Produces/@Consumes: JSON in and out,
+// converted automatically by JSON-B.
 @Path("/members")
-// Set at class level, so every method reads and writes JSON
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class MemberResource {
 
-    // @Inject: CDI (Contexts and Dependency Injection) supplies the MemberService
-    // instance. CDI is enabled by the beans.xml file in WEB-INF.
+    // @Inject: CDI supplies the EJB (CDI is switched on by WEB-INF/beans.xml)
     @Inject
-    private MemberService memberService;
+    private MemberService members;
 
-    // GET /api/members            -> every member
-    // GET /api/members?search=tha -> members whose name or email contains "tha"
-    // @QueryParam reads a ?name=value parameter from the URL (null if it's missing)
+    // GET /api/members?q=0821234567. Admins can search by name too; officers by exact phone or ID number.
     @GET
-    public List<MemberResponse> list(@QueryParam("search") String search) {
-        return memberService.findAll(search).stream().map(MemberResponse::from).toList();
+    public List<MemberView> search(@QueryParam("q") String query) {
+        return members.search(query).stream().map(MemberView::from).toList();
     }
 
-    // GET /api/members/5 -> one member, or 404 if there's no member 5.
-    // {id} in @Path is a placeholder; @PathParam("id") copies it into the parameter.
+    // @Valid runs the Bean Validation rules on the body first (400 if they fail)
+    @POST
+    public Response register(@Valid @NotNull MemberRegistration registration, @Context UriInfo uri) {
+        MemberView created = MemberView.from(members.register(registration));
+        return Response.created(uri.getAbsolutePathBuilder().path(created.id().toString()).build()).entity(created).build();
+    }
+
+    // {id} is a path placeholder; JAX-RS converts it to a UUID (an invalid one gives 404)
     @GET
     @Path("/{id}")
-    public MemberResponse get(@PathParam("id") Long id) {
-        return MemberResponse.from(memberService.find(id));
+    public MemberView get(@PathParam("id") UUID id) {
+        return MemberView.from(members.find(id));
     }
 
-    // POST /api/members with body {"name":"Thandi","email":"thandi@example.com"}
-    // @Valid: run the Bean Validation rules on the request first. If they fail, the
-    // client gets a 400 listing the problems and this method never runs.
-    // @NotNull: an empty body is also a 400.
-    @POST
-    public Response create(@Valid @NotNull MemberRequest request, @Context UriInfo uriInfo) {
-        MemberResponse created = MemberResponse.from(memberService.create(request));
-        // 201 Created, with a Location header pointing at the new member
-        URI location = uriInfo.getAbsolutePathBuilder().path(created.id().toString()).build();
-        return Response.created(location).entity(created).build();
-    }
-
-    // PUT /api/members/5 replaces the member's details
     @PUT
     @Path("/{id}")
-    public MemberResponse update(@PathParam("id") Long id, @Valid @NotNull MemberRequest request) {
-        return MemberResponse.from(memberService.update(id, request));
+    public MemberView update(@PathParam("id") UUID id, @Valid @NotNull MemberUpdate update) {
+        return MemberView.from(members.update(id, update));
     }
 
-    // DELETE /api/members/5 -> 204 No Content. Refused (409) once they've joined a stokvel.
-    @DELETE
-    @Path("/{id}")
-    public Response delete(@PathParam("id") Long id) {
-        memberService.delete(id);
-        return Response.noContent().build();
-    }
-
-    // GET /api/members/5/memberships -> the stokvels this member belongs to
     @GET
     @Path("/{id}/memberships")
-    public List<MembershipResponse> memberships(@PathParam("id") Long id) {
-        return memberService.memberships(id).stream().map(MembershipResponse::from).toList();
+    public List<MembershipView> memberships(@PathParam("id") UUID id) {
+        return members.memberships(id).stream().map(MembershipView::from).toList();
     }
 }
