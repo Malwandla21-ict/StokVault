@@ -1,13 +1,15 @@
 package com.stokvault.resource;
 
+import com.stokvault.domain.VerificationStatus;
 import com.stokvault.dto.ContributionRequest;
-import com.stokvault.dto.ContributionResponse;
+import com.stokvault.dto.ContributionView;
+import com.stokvault.dto.VerificationDecision;
+import com.stokvault.exception.ResourceNotFoundException;
 import com.stokvault.service.ContributionService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -19,53 +21,57 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 
-import java.net.URI;
-import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /**
- * Money paid into one stokvel: /api/stokvels/{stokvelId}/contributions.
+ * Contributions: /api/groups/{groupId}/contributions
  */
-@Path("/stokvels/{stokvelId}/contributions")
+@Path("/groups/{groupId}/contributions")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class ContributionResource {
 
     @Inject
-    private ContributionService contributionService;
+    private ContributionService contributions;
 
-    // GET .../contributions?memberId=3&from=2026-06-01&to=2026-09-30 (all filters optional).
-    // Dates are converted by LocalDateParamConverterProvider.
+    // ?cycleId=...&memberId=...&status=PENDING_REVIEW (all optional). Plain members only ever get their own.
     @GET
-    public List<ContributionResponse> list(@PathParam("stokvelId") Long stokvelId,
-                                           @QueryParam("memberId") Long memberId,
-                                           @QueryParam("from") LocalDate from,
-                                           @QueryParam("to") LocalDate to) {
-        return contributionService.list(stokvelId, memberId, from, to).stream()
-                .map(ContributionResponse::from).toList();
+    public List<ContributionView> list(@PathParam("groupId") UUID groupId, @QueryParam("cycleId") UUID cycleId,
+                                       @QueryParam("memberId") UUID memberId, @QueryParam("status") VerificationStatus status) {
+        return contributions.list(groupId, cycleId, memberId, status).stream().map(ContributionView::from).toList();
     }
 
-    @GET
-    @Path("/{contributionId}")
-    public ContributionResponse get(@PathParam("stokvelId") Long stokvelId,
-                                    @PathParam("contributionId") Long contributionId) {
-        return ContributionResponse.from(contributionService.find(stokvelId, contributionId));
-    }
-
-    // POST .../contributions with {"memberId":3,"amount":500,"paymentMethod":"EFT"}
+    /**
+     * 201 Created for a new contribution; 200 OK with the existing one when the same
+     * (member, cycle, payment reference) was already recorded (idempotent retries are safe).
+     */
     @POST
-    public Response record(@PathParam("stokvelId") Long stokvelId, @Valid @NotNull ContributionRequest request,
-                           @Context UriInfo uriInfo) {
-        ContributionResponse recorded = ContributionResponse.from(contributionService.record(stokvelId, request));
-        URI location = uriInfo.getAbsolutePathBuilder().path(recorded.id().toString()).build();
-        return Response.created(location).entity(recorded).build();
+    public Response record(@PathParam("groupId") UUID groupId, @Valid @NotNull ContributionRequest request, @Context UriInfo uri) {
+        ContributionService.Recorded recorded = contributions.record(groupId, request);
+        ContributionView view = ContributionView.from(recorded.contribution());
+        if (!recorded.created()) {
+            return Response.ok(view).build();
+        }
+        return Response.created(uri.getAbsolutePathBuilder().path(view.id().toString()).build()).entity(view).build();
     }
 
-    // DELETE .../contributions/7 -> for correcting a capture mistake
-    @DELETE
+    @GET
     @Path("/{contributionId}")
-    public Response delete(@PathParam("stokvelId") Long stokvelId, @PathParam("contributionId") Long contributionId) {
-        contributionService.delete(stokvelId, contributionId);
-        return Response.noContent().build();
+    public ContributionView get(@PathParam("groupId") UUID groupId, @PathParam("contributionId") UUID contributionId) {
+        // Reuse the list's visibility rules: plain members can only fetch their own
+        return contributions.list(groupId, null, null, null).stream()
+                .filter(c -> c.getId().equals(contributionId))
+                .findFirst()
+                .map(ContributionView::from)
+                .orElseThrow(() -> new ResourceNotFoundException("Contribution " + contributionId + " not found"));
+    }
+
+    // {"decision":"VERIFIED"} or {"decision":"REJECTED","note":"No such deposit on the statement"}
+    @POST
+    @Path("/{contributionId}/verify")
+    public ContributionView verify(@PathParam("groupId") UUID groupId, @PathParam("contributionId") UUID contributionId,
+                                   @Valid @NotNull VerificationDecision decision) {
+        return ContributionView.from(contributions.verify(groupId, contributionId, decision));
     }
 }

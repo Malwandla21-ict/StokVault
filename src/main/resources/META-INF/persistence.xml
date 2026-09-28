@@ -1,49 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    persistence.xml configures JPA (Jakarta Persistence), the layer that maps
-    Java classes (@Entity) to database tables.
+    Jakarta Persistence (JPA) configuration: maps the @Entity classes to PostgreSQL tables.
 -->
 <persistence version="3.2"
              xmlns="https://jakarta.ee/xml/ns/persistence"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence https://jakarta.ee/xml/ns/persistence/persistence_3_2.xsd">
 
-    <!--
-        A "persistence unit" is a named group of entities + a database connection.
-        JTA = transactions are managed by the server (EJBs start/commit them for you).
-    -->
+    <!-- JTA: transactions are managed by the server (every EJB method runs in one) -->
     <persistence-unit name="StokVaultPU" transaction-type="JTA">
 
-        <!--
-            Look up the connection pool Payara exposes under this JNDI name.
-            The app never sees the DB URL/password; those live in Payara (see README).
-        -->
+        <!-- The connection pool Payara exposes under this JNDI name (see README, "Payara setup") -->
         <jta-data-source>jdbc/StokVaultDS</jta-data-source>
 
-        <!-- Pick up every @Entity class in this WAR automatically -->
+        <!-- Pick up every @Entity and @Converter in the WAR -->
         <exclude-unlisted-classes>false</exclude-unlisted-classes>
+
+        <!--
+            Second-level cache (SDD 8.3): only entities marked @Cacheable would be cached. None are,
+            so financial records are always read from the database, never from a stale cache.
+        -->
+        <shared-cache-mode>ENABLE_SELECTIVE</shared-cache-mode>
 
         <properties>
             <!--
-                On every deploy, create missing tables and add columns for any new entity fields.
-                Existing data is kept. It never drops or changes existing columns, so if you rename a
-                field or change its type, fix the column by hand (ALTER TABLE) in pgAdmin.
-                This is an EclipseLink option; the standard JPA equivalent,
-                jakarta.persistence.schema-generation.database.action = "create", only creates
-                missing tables and would ignore new fields on an existing entity.
+                On every deploy, create missing tables and add columns for new entity fields; existing
+                data is kept. Renamed/retyped fields are NOT migrated: change those with ALTER TABLE.
+                (EclipseLink option; the standard jakarta.persistence.schema-generation "create" action
+                would ignore new fields on existing tables.)
             -->
             <property name="eclipselink.ddl-generation" value="create-or-extend-tables"/>
             <property name="eclipselink.ddl-generation.output-mode" value="database"/>
 
-            <!--
-                Payara's JPA provider is EclipseLink. This tells it to generate
-                PostgreSQL-flavoured SQL (EclipseLink's equivalent of a Hibernate "dialect").
-            -->
+            <!-- Payara's JPA provider is EclipseLink: generate PostgreSQL SQL -->
             <property name="eclipselink.target-database" value="PostgreSQL"/>
 
-            <!-- Log the SQL EclipseLink runs to the Payara server log (handy while learning) -->
+            <!-- Show the SQL in server.log while developing (set to "OFF" in production) -->
             <property name="eclipselink.logging.level.sql" value="FINE"/>
-            <property name="eclipselink.logging.parameters" value="true"/>
+            <property name="eclipselink.logging.parameters" value="false"/>
         </properties>
     </persistence-unit>
 </persistence>

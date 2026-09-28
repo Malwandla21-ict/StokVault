@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Jakarta Batch job: automated payout eligibility check (SDD 4.3).
+    A "chunk" step reads items one by one, processes each, and writes them in groups of
+    item-count, committing a transaction per group. Reader, processor and writer are CDI beans
+    referred to by their @Named names.
+-->
+<job id="payout-eligibility" xmlns="https://jakarta.ee/xml/ns/jakartaee"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/jobXML_2_0.xsd"
+     version="2.0">
+    <step id="check-scheduled-payouts">
+        <chunk item-count="20">
+            <reader ref="scheduledPayoutReader">
+                <properties>
+                    <!-- Passes the job parameter on to the reader's @BatchProperty groupId -->
+                    <property name="groupId" value="#{jobParameters['groupId']}"/>
+                </properties>
+            </reader>
+            <processor ref="eligibilityProcessor"/>
+            <writer ref="eligibilityWriter"/>
+        </chunk>
+    </step>
+</job>

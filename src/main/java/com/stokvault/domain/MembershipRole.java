@@ -1,16 +1,14 @@
 package com.stokvault.domain;
 
 /**
- * A member's role within one stokvel. The same person can hold different roles in different stokvels.
+ * A member's role inside one group (SDD 5.2). Roles are per group: the same person can be
+ * TREASURER of one stokvel and an ordinary MEMBER of another.
  */
 public enum MembershipRole {
-    CHAIRPERSON,
+    /** Records and verifies contributions, runs and pays out payouts. One active treasurer per group. */
     TREASURER,
-    SECRETARY,
-    MEMBER;
-
-    /** Office-bearer roles: a stokvel can have only one active member in each of these. */
-    public boolean isOffice() {
-        return this != MEMBER;
-    }
+    /** Elected committee: approves high-value payouts, overrides failed eligibility checks, manages roles. */
+    COMMITTEE,
+    /** Contributes, views their own history and payout position. */
+    MEMBER
 }

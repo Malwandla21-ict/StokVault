@@ -1,0 +1,11 @@
+package com.stokvault.domain;
+
+public enum NotificationType {
+    LOGIN_CODE,
+    CONTRIBUTION_RECORDED,
+    CONTRIBUTION_VERIFIED,
+    CONTRIBUTION_REJECTED,
+    CONTRIBUTION_REMINDER,
+    PAYOUT_APPROVAL_REQUESTED,
+    PAYOUT_PAID
+}

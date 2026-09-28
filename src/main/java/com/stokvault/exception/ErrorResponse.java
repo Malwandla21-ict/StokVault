@@ -6,7 +6,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.List;
 
 /**
- * The JSON body of every error response, e.g.
+ * The JSON body of every API error, e.g.
  * {"status":409,"error":"Conflict","message":"Insufficient funds...","details":[]}
  */
 public record ErrorResponse(int status, String error, String message, List<String> details) {
