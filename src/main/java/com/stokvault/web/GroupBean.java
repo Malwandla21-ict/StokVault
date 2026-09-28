@@ -12,7 +12,10 @@ import com.stokvault.domain.NotificationChannel;
 import com.stokvault.domain.PaymentMethod;
 import com.stokvault.domain.PayoutStatus;
 import com.stokvault.domain.VerificationStatus;
+import com.stokvault.dto.ActivityItem;
 import com.stokvault.dto.AuditEntryView;
+import com.stokvault.dto.ContributionMatrix;
+import com.stokvault.dto.RotationSlot;
 import com.stokvault.dto.ContributionRequest;
 import com.stokvault.dto.ContributionView;
 import com.stokvault.dto.CycleGrid;
@@ -86,6 +89,10 @@ public class GroupBean implements Serializable {
     private List<MembershipView> memberList = List.of();
     private List<AuditEntryView> auditList = List.of();
     private HashChain.Verification chain;
+    private ContributionMatrix matrix;
+    private List<RotationSlot> rotation = List.of();
+    private List<ActivityItem> activity = List.of();
+    private Map<UUID, CycleGrid.Row> gridByMember = Map.of();
 
     // Per-row inputs (reject/override/cancel reasons, role and position edits), keyed by row id
     private final Map<UUID, String> notes = new HashMap<>();
@@ -150,18 +157,29 @@ public class GroupBean implements Serializable {
     private void reload() {
         summary = reports.summary(id);
         grid = null;
-        if (tab.equals("contributions") || tab.equals("overview")) {
-            contributionList = contributions.list(id, null, null, null).stream().map(ContributionView::from).toList();
-            if (isOfficer() && summary.currentCycle() != null) {
-                grid = cycles.grid(id, summary.currentCycle().id());
-            }
-            cycleList = cycles.list(id);
-            if (amount == null && summary.currentCycle() != null) {
+        gridByMember = Map.of();
+        if (summary.currentCycle() != null) {
+            // Who has paid the current cycle: shown on most tabs
+            grid = cycles.grid(id, summary.currentCycle().id());
+            gridByMember = grid.rows().stream().collect(java.util.stream.Collectors.toMap(CycleGrid.Row::memberId, r -> r));
+            if (amount == null) {
                 amount = summary.currentCycle().amountDue();
             }
         }
+        if (tab.equals("overview")) {
+            activity = reports.activity(id, 6);
+        }
+        if (payerId == null && isTreasurer() && !getUnpaidOthers().isEmpty()) {
+            payerId = getUnpaidOthers().get(0).memberId(); // "Record payment" opens on the first unpaid member
+        }
+        if (tab.equals("contributions")) {
+            contributionList = contributions.list(id, null, null, null).stream().map(ContributionView::from).toList();
+            cycleList = cycles.list(id);
+            matrix = cycles.matrix(id, 6);
+        }
         if (tab.equals("payouts")) {
             payoutList = payouts.list(id, null).stream().map(PayoutView::from).toList();
+            rotation = reports.rotation(id);
         }
         if (tab.equals("payouts") || tab.equals("members") || tab.equals("contributions")) {
             memberList = memberships.list(id, tab.equals("members")).stream().map(MembershipView::from).toList();
@@ -253,6 +271,47 @@ public class GroupBean implements Serializable {
 
     public List<ContributionView> getUnresolved() {
         return contributionList.stream().filter(c -> c.verificationStatus().isUnresolved()).toList();
+    }
+
+    /** This cycle's status for a member (PAID, AWAITING_VERIFICATION, PARTIAL, OUTSTANDING), or null. */
+    public String cycleStatus(UUID memberId) {
+        CycleGrid.Row row = gridByMember.get(memberId);
+        return row == null ? null : row.status();
+    }
+
+    /** Current-cycle rows, unpaid first (the "This month" list). */
+    public List<CycleGrid.Row> getThisMonth() {
+        if (grid == null) {
+            return List.of();
+        }
+        return grid.rows().stream()
+                .sorted(java.util.Comparator.comparing((CycleGrid.Row r) -> r.status().equals("PAID")).thenComparing(CycleGrid.Row::payoutPosition))
+                .toList();
+    }
+
+    /** Who the treasurer can record a payment for: everyone who hasn't paid the cycle in full. */
+    public List<CycleGrid.Row> getUnpaid() {
+        return getThisMonth().stream().filter(r -> !r.status().equals("PAID")).toList();
+    }
+
+    /** Unpaid members other than me (the treasurer records their own payment as "Me"). */
+    public List<CycleGrid.Row> getUnpaidOthers() {
+        UUID me = user.getMe().id();
+        return getUnpaid().stream().filter(r -> !r.memberId().equals(me)).toList();
+    }
+
+    /** My own line in the standings, or null if I'm not a member (e.g. an admin). */
+    public GroupSummary.Standing getMyStanding() {
+        UUID me = user.getMe().id();
+        return summary.members().stream().filter(s -> s.memberId().equals(me)).findFirst().orElse(null);
+    }
+
+    public boolean isCanRecord() {
+        return isActiveGroup() && isCycleOpen() && isMemberOfGroup();
+    }
+
+    public int getActiveMemberCount() {
+        return (int) summary.members().stream().filter(m -> m.status().name().equals("ACTIVE")).count();
     }
 
     public boolean canVerify(ContributionView c) {
@@ -461,6 +520,9 @@ public class GroupBean implements Serializable {
     public List<MembershipView> getMemberList() { return memberList; }
     public List<AuditEntryView> getAuditList() { return auditList; }
     public HashChain.Verification getChain() { return chain; }
+    public ContributionMatrix getMatrix() { return matrix; }
+    public List<RotationSlot> getRotation() { return rotation; }
+    public List<ActivityItem> getActivity() { return activity; }
     public Map<UUID, String> getNotes() { return notes; }
     public Map<UUID, String> getRoleEdits() { return roleEdits; }
     public Map<UUID, String> getPositionEdits() { return positionEdits; }

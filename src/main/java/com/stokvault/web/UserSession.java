@@ -61,6 +61,17 @@ public class UserSession implements Serializable {
         return securityContext.isCallerInRole(Roles.TREASURER);
     }
 
+    /** Shown under the name in the sidebar. */
+    public String getRoleLabel() {
+        if (isAdmin()) {
+            return "Coop Office";
+        }
+        if (isTreasurer()) {
+            return "Treasurer";
+        }
+        return isCommittee() ? "Committee" : "Member";
+    }
+
     public String getFirstName() {
         MemberView m = getMe();
         return m == null ? "" : m.fullName().split(" ")[0];

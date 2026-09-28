@@ -7,150 +7,144 @@
     <!-- Coop Office (UMP) administration: platform-wide reports, onboarding groups and people -->
     <ui:param name="nav" value="admin"/>
     <ui:define name="title">Coop Office</ui:define>
+    <ui:define name="heading">Coop Office</ui:define>
+    <ui:define name="subtitle">Every stokvel on the platform, onboarding and background jobs</ui:define>
+    <ui:define name="actions">
+        <h:form styleClass="inline" rendered="#{user.admin}">
+            <h:commandButton value="Run eligibility check" action="#{adminBean.runEligibility}" styleClass="btn"/>
+            <h:commandButton value="Send due reminders" action="#{adminBean.sendReminders}" styleClass="btn"/>
+        </h:form>
+    </ui:define>
+
     <ui:define name="content">
-    <ui:fragment rendered="#{not user.admin}"><div class="callout danger">This page is for the Coop Office only.</div></ui:fragment>
+    <ui:fragment rendered="#{not user.admin}"><div class="callout bad">This page is for the Coop Office only.</div></ui:fragment>
     <ui:fragment rendered="#{user.admin}">
-        <div class="page-head">
-            <div>
-                <h1>Coop Office</h1>
-                <p>Platform-wide view of every stokvel, onboarding, and background jobs.</p>
-            </div>
-            <h:form styleClass="row">
-                <h:commandButton value="Run eligibility check now" action="#{adminBean.runEligibility}" styleClass="btn"/>
-                <h:commandButton value="Send due reminders now" action="#{adminBean.sendReminders}" styleClass="btn"/>
-            </h:form>
+        <div class="stats-row">
+            <div class="stat"><span class="kicker">Stokvels</span><span class="value">#{adminBean.report.groups}</span></div>
+            <div class="stat"><span class="kicker">Memberships</span><span class="value">#{adminBean.report.activeMembers}</span></div>
+            <div class="stat"><span class="kicker">Money held</span><span class="value amt">#{fmt.rand(adminBean.report.totalBalance)}</span></div>
+            <div class="stat #{fmt.positive(adminBean.report.totalArrears) ? 'warn' : ''}"><span class="kicker">Arrears</span><span class="value amt">#{fmt.rand(adminBean.report.totalArrears)}</span></div>
+            <div class="stat"><span class="kicker">To verify</span><span class="value">#{adminBean.report.awaitingVerification}</span></div>
+            <div class="stat"><span class="kicker">To approve</span><span class="value">#{adminBean.report.payoutsAwaitingApproval}</span></div>
         </div>
 
-        <div class="stats">
-            <div class="stat"><div class="label">Stokvels</div><div class="value">#{adminBean.report.groups}</div></div>
-            <div class="stat"><div class="label">Active memberships</div><div class="value">#{adminBean.report.activeMembers}</div></div>
-            <div class="stat good"><div class="label">Money held</div><div class="value">#{fmt.rand(adminBean.report.totalBalance)}</div></div>
-            <div class="stat #{fmt.positive(adminBean.report.totalArrears) ? 'warn' : ''}"><div class="label">Arrears</div><div class="value">#{fmt.rand(adminBean.report.totalArrears)}</div></div>
-            <div class="stat"><div class="label">Awaiting verification</div><div class="value">#{adminBean.report.awaitingVerification}</div></div>
-            <div class="stat"><div class="label">Awaiting approval</div><div class="value">#{adminBean.report.payoutsAwaitingApproval}</div></div>
-        </div>
-
-        <h2>Stokvels</h2>
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th>Name</th><th>Type</th><th>Status</th><th class="num">Members</th><th class="num">Balance</th><th class="num">Paid out</th><th class="num">Arrears</th><th class="num">Unverified</th><th>Audit chain</th></tr></thead>
-                <tbody>
+        <section class="card flush">
+            <div class="card-head"><h2>Stokvels</h2><span class="muted">Audit chains are re-verified every time this page loads</span></div>
+            <div class="scroll-x"><div class="min">
+                <div class="list-row list-head" style="grid-template-columns:minmax(0,2fr) 100px 60px repeat(3,minmax(0,1fr)) 70px 90px">
+                    <span>Name</span><span>Status</span><span class="num">Members</span><span class="num">Balance</span><span class="num">Paid out</span><span class="num">Arrears</span><span class="num">To verify</span><span class="num">Audit</span></div>
                 <ui:repeat value="#{adminBean.report.rows}" var="r">
-                    <tr>
-                        <td><a href="group.xhtml?id=#{r.groupId}">#{r.name}</a></td>
-                        <td>#{fmt.label(r.type)}</td>
-                        <td><span class="badge #{r.status eq 'ACTIVE' ? 'good' : (r.status eq 'DRAFT' ? 'info' : 'warn')}">#{fmt.label(r.status)}</span></td>
-                        <td class="num">#{r.activeMembers}</td>
-                        <td class="num">#{fmt.rand(r.balance)}</td>
-                        <td class="num">#{fmt.rand(r.totalPaidOut)}</td>
-                        <td class="num">#{fmt.rand(r.arrears)}</td>
-                        <td class="num">#{r.awaitingVerification}</td>
-                        <td><span class="badge #{r.auditChainValid ? 'good' : 'danger'}">#{r.auditChainValid ? 'Intact' : 'BROKEN'}</span></td>
-                    </tr>
+                    <div class="list-row" style="grid-template-columns:minmax(0,2fr) 100px 60px repeat(3,minmax(0,1fr)) 70px 90px">
+                        <div><a class="strong" href="group.xhtml?id=#{r.groupId}">#{r.name}</a><div class="muted" style="font-size:12px">#{fmt.label(r.type)}</div></div>
+                        <span><span class="pill #{fmt.tone(r.status)}">#{fmt.label(r.status)}</span></span>
+                        <span class="num">#{r.activeMembers}</span>
+                        <span class="num strong amt">#{fmt.rand(r.balance)}</span>
+                        <span class="num amt">#{fmt.rand(r.totalPaidOut)}</span>
+                        <span class="num amt">#{fmt.rand(r.arrears)}</span>
+                        <span class="num">#{r.awaitingVerification}</span>
+                        <div class="end"><span class="pill #{r.auditChainValid ? 'good' : 'bad'}">#{r.auditChainValid ? 'Intact' : 'BROKEN'}</span></div>
+                    </div>
                 </ui:repeat>
-                </tbody>
-            </table>
-            <h:panelGroup rendered="#{empty adminBean.report.rows}"><p class="empty">No stokvels yet.</p></h:panelGroup>
-        </div>
+                <ui:fragment rendered="#{empty adminBean.report.rows}"><div class="empty">No stokvels yet.</div></ui:fragment>
+            </div></div>
+        </section>
 
-        <div class="grid-2" style="margin-top:24px">
-            <section class="card">
+        <div class="row">
+            <section class="card pad grow-1">
                 <h2>Register a stokvel</h2>
-                <h:form styleClass="form">
-                    <div class="field"><h:outputLabel for="gname" value="Name"/><h:inputText id="gname" value="#{adminBean.name}"/></div>
-                    <div class="field"><h:outputLabel for="gdesc" value="Description"/><h:inputText id="gdesc" value="#{adminBean.description}"/></div>
+                <p class="muted">It starts as a draft: add members and a treasurer, then activate it.</p>
+                <h:form styleClass="form grid">
+                    <div class="field" style="grid-column:1/-1"><h:outputLabel for="gname" value="Name"/><h:inputText id="gname" value="#{adminBean.name}"/></div>
                     <div class="field"><h:outputLabel for="gtype" value="Type"/>
                         <h:selectOneMenu id="gtype" value="#{adminBean.type}">
                             <f:selectItems value="#{adminBean.types}" var="t" itemLabel="#{fmt.label(t)}" itemValue="#{t}"/>
                         </h:selectOneMenu></div>
-                    <div class="field"><h:outputLabel for="gamt" value="Contribution per cycle (R)"/>
-                        <h:inputText id="gamt" value="#{adminBean.contributionAmount}" pt:type="number" pt:step="0.01"/></div>
                     <div class="field"><h:outputLabel for="gfreq" value="Frequency"/>
                         <h:selectOneMenu id="gfreq" value="#{adminBean.frequency}">
-                            <f:selectItems value="#{adminBean.frequencies}" var="f" itemLabel="#{fmt.label(f)}" itemValue="#{f}"/>
+                            <f:selectItems value="#{adminBean.frequencies}" var="fq" itemLabel="#{fmt.label(fq)}" itemValue="#{fq}"/>
                         </h:selectOneMenu></div>
+                    <div class="field"><h:outputLabel for="gamt" value="Contribution (R)"/>
+                        <h:inputText id="gamt" value="#{adminBean.contributionAmount}" pt:type="number" pt:step="0.01"/></div>
                     <div class="field"><h:outputLabel for="gstart" value="First due date"/>
                         <h:inputText id="gstart" value="#{adminBean.startDate}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
                     <div class="field"><h:outputLabel for="gthr" value="Approval threshold (R)"/>
                         <h:inputText id="gthr" value="#{adminBean.approvalThreshold}" pt:type="number" pt:step="0.01"/></div>
-                    <div class="field"><h:outputLabel for="gcomp" value="Required cycle completion (%)"/>
+                    <div class="field"><h:outputLabel for="gcomp" value="Required completion (%)"/>
                         <h:inputText id="gcomp" value="#{adminBean.completionThreshold}" pt:type="number" pt:min="1" pt:max="100"/></div>
-                    <div class="field"><h:outputLabel for="gben" value="Burial benefit (R, burial societies only)"/>
+                    <div class="field"><h:outputLabel for="gben" value="Burial benefit (R)"/>
                         <h:inputText id="gben" value="#{adminBean.benefitAmount}" pt:type="number" pt:step="0.01"/></div>
+                    <div class="field" style="grid-column:1/-1"><h:outputLabel for="gdesc" value="Description"/><h:inputText id="gdesc" value="#{adminBean.description}"/></div>
                     <h:commandButton value="Create as draft" action="#{adminBean.createGroup}" styleClass="btn primary"/>
                 </h:form>
             </section>
 
-            <section class="card">
+            <section class="card pad grow-1">
                 <h2>Register a person</h2>
+                <p class="muted">They sign in the first time with an SMS code, then choose a password.</p>
                 <h:form styleClass="form">
                     <div class="field"><h:outputLabel for="pname" value="Full name"/><h:inputText id="pname" value="#{adminBean.regName}"/></div>
                     <div class="field"><h:outputLabel for="pid" value="SA ID number"/><h:inputText id="pid" value="#{adminBean.regNationalId}" pt:inputmode="numeric" pt:maxlength="13"/></div>
                     <div class="field"><h:outputLabel for="pphone" value="Mobile number"/><h:inputText id="pphone" value="#{adminBean.regPhone}" pt:type="tel"/></div>
                     <div class="field"><h:outputLabel for="pemail" value="Email (optional)"/><h:inputText id="pemail" value="#{adminBean.regEmail}" pt:type="email"/></div>
-                    <div class="field"><h:outputLabel for="pch" value="Send messages by"/>
-                        <h:selectOneMenu id="pch" value="#{adminBean.regChannel}">
-                            <f:selectItems value="#{adminBean.channels}" var="c" itemLabel="#{fmt.label(c)}" itemValue="#{c}"/>
-                        </h:selectOneMenu></div>
+                    <div class="field"><span class="label">Send messages by</span>
+                        <h:selectOneRadio value="#{adminBean.regChannel}" layout="lineDirection" styleClass="seg-radio">
+                            <f:selectItems value="#{adminBean.channels}" var="ch" itemLabel="#{fmt.label(ch)}" itemValue="#{ch}"/>
+                        </h:selectOneRadio></div>
                     <label class="check"><h:selectBooleanCheckbox value="#{adminBean.regConsent}"/>
-                        <span>The person has consented to StokVault processing their personal information (POPIA).</span></label>
+                        <span>They consented to StokVault processing their personal information (POPIA).</span></label>
                     <h:commandButton value="Register" action="#{adminBean.register}" styleClass="btn primary"/>
                 </h:form>
             </section>
         </div>
 
-        <h2 style="margin-top:24px">People</h2>
-        <h:form styleClass="row" style="margin-bottom:10px">
-            <h:inputText value="#{adminBean.peopleSearch}" pt:type="search" pt:placeholder="Search name or phone" style="max-width:320px"/>
-            <h:commandButton value="Search" action="#{adminBean.filter}" styleClass="btn"/>
-        </h:form>
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>ID number</th><th>Messages by</th><th>Password set</th><th>Registered</th></tr></thead>
-                <tbody>
+        <section class="card flush">
+            <div class="card-head">
+                <h2>People</h2>
+                <h:form styleClass="inline">
+                    <h:inputText value="#{adminBean.peopleSearch}" pt:type="search" pt:placeholder="Name or mobile number" style="width:240px"/>
+                    <h:commandButton value="Search" action="#{adminBean.filter}" styleClass="btn sm"/>
+                </h:form>
+            </div>
+            <div class="scroll-x"><div class="min">
                 <ui:repeat value="#{adminBean.people}" var="m">
-                    <tr>
-                        <td>#{m.fullName}<ui:fragment rendered="#{m.admin}"> <span class="badge info">Admin</span></ui:fragment></td>
-                        <td>#{m.phoneNumber}</td>
-                        <td>#{m.email}</td>
-                        <td class="hash">#{m.nationalIdMasked}</td>
-                        <td>#{fmt.label(m.preferredChannel)}</td>
-                        <td>#{m.passwordSet ? 'Yes' : 'Not yet'}</td>
-                        <td>#{fmt.dateTime(m.createdAt)}</td>
-                    </tr>
+                    <div class="list-row" style="grid-template-columns:minmax(0,1.8fr) minmax(0,1fr) minmax(0,1.4fr) 130px 100px">
+                        <div class="person"><span class="avatar">#{fmt.initials(m.fullName)}</span>
+                            <span class="name">#{m.fullName}<span class="sub">Registered #{fmt.date(m.createdAt.toLocalDate())}</span></span></div>
+                        <span class="muted">#{m.phoneNumber}</span>
+                        <span class="muted">#{m.email}</span>
+                        <span class="hash">ID #{m.nationalIdMasked}</span>
+                        <div class="end">
+                            <ui:fragment rendered="#{m.admin}"><span class="pill info">Admin</span></ui:fragment>
+                            <ui:fragment rendered="#{not m.admin}"><span class="pill #{m.passwordSet ? 'good' : 'warn'}">#{m.passwordSet ? 'Active' : 'Invited'}</span></ui:fragment>
+                        </div>
+                    </div>
                 </ui:repeat>
-                </tbody>
-            </table>
-        </div>
+            </div></div>
+        </section>
 
-        <h2 style="margin-top:24px">Notification log</h2>
-        <h:form styleClass="row" style="margin-bottom:10px">
-            <h:selectOneMenu value="#{adminBean.notificationFilter}" style="max-width:220px">
-                <f:selectItem itemLabel="All" itemValue="#{null}"/>
-                <f:selectItems value="#{adminBean.notificationStatuses}" var="s" itemLabel="#{fmt.label(s)}" itemValue="#{s}"/>
-            </h:selectOneMenu>
-            <h:commandButton value="Filter" action="#{adminBean.filter}" styleClass="btn"/>
-            <small>FAILED messages went to the dead-letter queue after 3 attempts and need follow-up.</small>
-        </h:form>
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th>When</th><th>To</th><th>Type</th><th>Channel</th><th>Status</th><th class="num">Attempts</th><th>Message</th></tr></thead>
-                <tbody>
+        <section class="card flush">
+            <div class="card-head">
+                <h2>Notification log</h2>
+                <h:form styleClass="inline">
+                    <h:selectOneMenu value="#{adminBean.notificationFilter}" style="width:180px">
+                        <f:selectItem itemLabel="All messages" itemValue="#{null}"/>
+                        <f:selectItems value="#{adminBean.notificationStatuses}" var="s" itemLabel="#{fmt.label(s)}" itemValue="#{s}"/>
+                    </h:selectOneMenu>
+                    <h:commandButton value="Filter" action="#{adminBean.filter}" styleClass="btn sm"/>
+                </h:form>
+            </div>
+            <p class="muted" style="padding:0 24px 12px">Failed messages went to the dead-letter queue after 3 attempts and need follow-up.</p>
+            <div class="scroll-x"><div class="min">
                 <ui:repeat value="#{adminBean.notifications}" var="n">
-                    <tr>
-                        <td>#{fmt.dateTime(n.createdAt)}</td>
-                        <td>#{n.memberName}<span class="sub">#{n.groupName}</span></td>
-                        <td>#{fmt.label(n.type)}</td>
-                        <td>#{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</td>
-                        <td><span class="badge #{n.status eq 'SENT' ? 'good' : (n.status eq 'FAILED' ? 'danger' : 'warn')}">#{fmt.label(n.status)}</span>
-                            <ui:fragment rendered="#{not empty n.lastError}"><span class="sub">#{n.lastError}</span></ui:fragment></td>
-                        <td class="num">#{n.attempts}</td>
-                        <td class="wrap">#{n.body}</td>
-                    </tr>
+                    <div class="list-row" style="grid-template-columns:110px minmax(0,1.2fr) minmax(0,3fr) 120px">
+                        <span class="muted">#{fmt.dateTime(n.createdAt)}</span>
+                        <div><div class="strong">#{n.memberName}</div><div class="muted" style="font-size:12px">#{fmt.label(n.type)} · #{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</div></div>
+                        <div><div>#{n.body}</div><ui:fragment rendered="#{not empty n.lastError}"><div class="muted" style="font-size:12px">#{n.lastError}</div></ui:fragment></div>
+                        <div class="end"><span class="pill #{fmt.tone(n.status)}">#{fmt.label(n.status)}#{n.attempts gt 1 ? ' · ' += n.attempts += ' tries' : ''}</span></div>
+                    </div>
                 </ui:repeat>
-                </tbody>
-            </table>
-        </div>
+            </div></div>
+        </section>
     </ui:fragment>
     </ui:define>
 </ui:composition>

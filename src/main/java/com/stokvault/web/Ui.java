@@ -57,10 +57,18 @@ public final class Ui {
         context.getExternalContext().getFlash().setKeepMessages(true);
     }
 
-    /** R 2 500,00 (South African formatting). */
+    /**
+     * "R 2 500,00": South African style (space between thousands, decimal comma), with a space
+     * after the R as in the design. Whole rands drop the ",00" to keep big figures readable.
+     */
     public static String rand(BigDecimal amount) {
-        NumberFormat format = NumberFormat.getCurrencyInstance(SOUTH_AFRICA);
-        return format.format(Money.orZero(amount));
+        BigDecimal value = Money.orZero(amount);
+        NumberFormat number = NumberFormat.getNumberInstance(SOUTH_AFRICA);
+        boolean whole = value.stripTrailingZeros().scale() <= 0;
+        number.setMinimumFractionDigits(whole ? 0 : 2);
+        number.setMaximumFractionDigits(2);
+        // en-ZA groups with a non-breaking space, so an amount never wraps across lines
+        return "R " + number.format(value);
     }
 
     private static final java.util.Map<String, String> ACRONYMS = java.util.Map.of("EFT", "EFT", "SMS", "SMS", "WHATSAPP", "WhatsApp");

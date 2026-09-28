@@ -88,39 +88,37 @@ public class LedgerService {
     }
 
     /** Members expected to pay this cycle: active, and joined on or before its due date. */
-    public long expectedPayers(ContributionCycle cycle) {
+    public List<UUID> expectedPayers(ContributionCycle cycle) {
         return em.createQuery("""
-                        SELECT COUNT(ms) FROM Membership ms
-                        WHERE ms.group = :group AND ms.status = :active AND ms.joinedDate <= :due""", Long.class)
-                .setParameter("group", cycle.getGroup())
-                .setParameter("active", MembershipStatus.ACTIVE)
-                .setParameter("due", cycle.getDueDate())
-                .getSingleResult();
-    }
-
-    /** % of expected payers who have paid the cycle in full (verified). */
-    public int completionPercent(ContributionCycle cycle) {
-        List<UUID> expected = em.createQuery("""
                         SELECT ms.member.id FROM Membership ms
                         WHERE ms.group = :group AND ms.status = :active AND ms.joinedDate <= :due""", UUID.class)
                 .setParameter("group", cycle.getGroup())
                 .setParameter("active", MembershipStatus.ACTIVE)
                 .setParameter("due", cycle.getDueDate())
                 .getResultList();
-        if (expected.isEmpty()) {
-            return 0;
-        }
+    }
+
+    /** How many expected payers have paid the cycle in full (verified). */
+    private long paidInFull(ContributionCycle cycle, List<UUID> expected) {
         Map<UUID, BigDecimal> verified = verifiedByMember(cycle);
-        long paid = expected.stream()
+        return expected.stream()
                 .filter(id -> verified.getOrDefault(id, Money.ZERO).compareTo(cycle.getAmountDue()) >= 0)
                 .count();
-        return (int) (paid * 100 / expected.size());
+    }
+
+    /** % of expected payers who have paid the cycle in full (verified). */
+    public int completionPercent(ContributionCycle cycle) {
+        List<UUID> expected = expectedPayers(cycle);
+        return expected.isEmpty() ? 0 : (int) (paidInFull(cycle, expected) * 100 / expected.size());
     }
 
     public CycleView view(ContributionCycle cycle) {
+        List<UUID> expected = expectedPayers(cycle);
+        long paid = paidInFull(cycle, expected);
+        int percent = expected.isEmpty() ? 0 : (int) (paid * 100 / expected.size());
         return new CycleView(cycle.getId(), cycle.getGroup().getId(), cycle.getCycleNumber(), cycle.getDueDate(),
-                cycle.getAmountDue(), cycle.getStatus(), completionPercent(cycle), verifiedTotal(cycle),
-                unverifiedCount(cycle));
+                cycle.getAmountDue(), cycle.getStatus(), percent, verifiedTotal(cycle), unverifiedCount(cycle),
+                expected.size(), paid, Money.of(cycle.getAmountDue().multiply(BigDecimal.valueOf(expected.size()))));
     }
 
     private BigDecimal payoutTotal(StokvelGroup group, List<PayoutStatus> statuses) {

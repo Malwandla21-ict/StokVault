@@ -17,47 +17,71 @@
     <title>Log in · StokVault</title>
     <link rel="icon" href="#{request.contextPath}/resources/brand/favicon.ico" sizes="any"/>
     <link rel="icon" href="#{request.contextPath}/resources/brand/stokvault-1a-favicon.svg" type="image/svg+xml"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;display=swap"/>
     <link rel="stylesheet" href="#{request.contextPath}/resources/css/stokvault.css?v=#{fmt.assetVersion}"/>
+    <script src="#{request.contextPath}/resources/js/stokvault.js?v=#{fmt.assetVersion}"></script>
 </h:head>
-<h:body styleClass="login-page">
-    <main class="login-card">
-        <img class="logo logo-light" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal.svg" alt="StokVault"/>
-        <img class="logo logo-dark" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal-reversed.svg" alt="StokVault"/>
-        <h1>Welcome back</h1>
-        <p class="lead">Transparent contributions and payouts for your stokvel.</p>
+<h:body>
+<div class="login">
+    <section class="panel">
+        <img class="logo" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal-reversed.svg" alt="StokVault"/>
+        <img class="watermark" src="#{request.contextPath}/resources/brand/stokvault-1a-symbol-reversed.svg" alt=""/>
+        <div>
+            <h1>Every rand, accounted for.</h1>
+            <p>Transparent contributions and payouts for your stokvel, with a record nobody can quietly change.</p>
+        </div>
+        <div class="points">
+            <span>See who has paid this cycle</span>
+            <span>Know when your payout is due</span>
+            <span>Every change in a tamper-evident audit trail</span>
+        </div>
+    </section>
 
-        <h:panelGroup layout="block" styleClass="callout info" rendered="#{param.loggedOut eq 'true'}">You have logged out.</h:panelGroup>
-        <h:panelGroup layout="block" styleClass="callout warn" rendered="#{param.expired eq 'true'}">Your session expired. Please log in again.</h:panelGroup>
-        <h:messages globalOnly="true" styleClass="messages" infoClass="msg-info" errorClass="msg-error"/>
-
-        <h:form id="login" styleClass="form">
-            <div class="field">
-                <h:outputLabel for="phone" value="Phone number"/>
-                <h:inputText id="phone" value="#{loginBean.phoneNumber}" pt:type="tel" pt:autocomplete="username"
-                             pt:inputmode="tel" pt:placeholder="082 123 4567" pt:autofocus="autofocus"/>
+    <section class="form-side">
+        <div class="form-card">
+            <div>
+                <h2>Log in</h2>
+                <p class="muted" style="margin-top:4px">Use the mobile number your stokvel registered for you.</p>
             </div>
 
-            <h:panelGroup layout="block" styleClass="stack" rendered="#{not loginBean.codeSent}">
-                <div class="field">
-                    <h:outputLabel for="password" value="Password"/>
-                    <h:inputSecret id="password" value="#{loginBean.password}" pt:autocomplete="current-password"/>
-                </div>
-                <h:commandButton value="Log in" action="#{loginBean.login}" styleClass="btn primary" style="width:100%"/>
-                <div class="divider">or</div>
-                <h:commandButton value="Text me a login code" action="#{loginBean.sendCode}" styleClass="btn" style="width:100%"/>
-                <p class="muted" style="font-size:.85rem;margin:0">New members: use a login code the first time, then choose a password.</p>
-            </h:panelGroup>
+            <h:panelGroup layout="block" styleClass="callout info" rendered="#{param.loggedOut eq 'true'}">You have logged out.</h:panelGroup>
+            <h:panelGroup layout="block" styleClass="callout warn" rendered="#{param.expired eq 'true'}">Your session expired. Please log in again.</h:panelGroup>
 
-            <h:panelGroup layout="block" styleClass="stack" rendered="#{loginBean.codeSent}">
+            <h:form id="login" styleClass="form">
                 <div class="field">
-                    <h:outputLabel for="code" value="6-digit code from the SMS"/>
-                    <h:inputText id="code" value="#{loginBean.code}" pt:inputmode="numeric" pt:autocomplete="one-time-code"
-                                 pt:maxlength="6" pt:autofocus="autofocus"/>
+                    <h:outputLabel for="phone" value="Mobile number"/>
+                    <h:inputText id="phone" value="#{loginBean.phoneNumber}" pt:type="tel" pt:autocomplete="username"
+                                 pt:inputmode="tel" pt:placeholder="082 123 4567" pt:autofocus="autofocus"/>
                 </div>
-                <h:commandButton value="Log in with code" action="#{loginBean.loginWithCode}" styleClass="btn primary" style="width:100%"/>
-                <h:commandButton value="Send a new code" action="#{loginBean.useCode}" styleClass="btn link"/>
-            </h:panelGroup>
-        </h:form>
-    </main>
+
+                <h:panelGroup layout="block" styleClass="form" rendered="#{not loginBean.codeSent}">
+                    <div class="field">
+                        <h:outputLabel for="password" value="Password"/>
+                        <h:inputSecret id="password" value="#{loginBean.password}" pt:autocomplete="current-password"/>
+                    </div>
+                    <h:commandButton value="Log in" action="#{loginBean.login}" styleClass="btn primary"/>
+                    <div class="divider">or</div>
+                    <h:commandButton value="Text me a login code" action="#{loginBean.sendCode}" styleClass="btn"/>
+                    <p class="muted" style="font-size:13px">First time here? Use a login code, then choose a password.</p>
+                </h:panelGroup>
+
+                <h:panelGroup layout="block" styleClass="form" rendered="#{loginBean.codeSent}">
+                    <div class="field">
+                        <h:outputLabel for="code" value="6-digit code from the SMS"/>
+                        <h:inputText id="code" value="#{loginBean.code}" pt:inputmode="numeric" pt:autocomplete="one-time-code"
+                                     pt:maxlength="6" pt:autofocus="autofocus"/>
+                    </div>
+                    <h:commandButton value="Log in with code" action="#{loginBean.loginWithCode}" styleClass="btn primary"/>
+                    <h:commandButton value="Send a new code" action="#{loginBean.useCode}" styleClass="btn ghost"/>
+                </h:panelGroup>
+            </h:form>
+        </div>
+    </section>
+</div>
+<div class="toasts" role="status" aria-live="polite">
+    <h:messages globalOnly="true" infoClass="toast-info" errorClass="toast-error"/>
+</div>
 </h:body>
 </html>

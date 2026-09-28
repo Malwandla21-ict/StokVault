@@ -10,7 +10,11 @@ import com.stokvault.domain.PayoutStatus;
 import com.stokvault.domain.VerificationStatus;
 import com.stokvault.domain.rules.PayoutContext;
 import com.stokvault.domain.rules.RotationalPayoutRule;
+import com.stokvault.dto.ActivityItem;
 import com.stokvault.dto.GroupSummary;
+import com.stokvault.dto.RotationSlot;
+import com.stokvault.entity.Contribution;
+import com.stokvault.entity.Payout;
 import com.stokvault.dto.MyPosition;
 import com.stokvault.dto.PlatformReport;
 import com.stokvault.entity.ContributionCycle;
@@ -152,6 +156,83 @@ public class ReportService {
                 rows.stream().map(PlatformReport.Row::arrears).reduce(Money.ZERO, BigDecimal::add),
                 rows.stream().mapToLong(PlatformReport.Row::awaitingVerification).sum(),
                 awaitingApproval, rows);
+    }
+
+    /**
+     * The payout order for the current round of a ROTATIONAL group: who has received this round,
+     * whose turn is next, and who is still waiting (with estimated dates). Empty for other types.
+     */
+    public List<RotationSlot> rotation(UUID groupId) {
+        StokvelGroup group = groups.find(groupId);
+        if (group.getType() != GroupType.ROTATIONAL) {
+            return List.of();
+        }
+        List<PayoutContext.MemberPosition> members = payouts.positions(group);
+        if (members.isEmpty()) {
+            return List.of();
+        }
+        long round = members.stream().mapToLong(PayoutContext.MemberPosition::payoutsReceived).min().orElse(0);
+
+        // Each member's latest (non-cancelled) payout
+        Map<UUID, Payout> latest = new HashMap<>();
+        em.createQuery("SELECT p FROM Payout p WHERE p.group = :group AND p.status <> :cancelled ORDER BY p.createdAt DESC", Payout.class)
+                .setParameter("group", group)
+                .setParameter("cancelled", PayoutStatus.CANCELLED)
+                .getResultStream()
+                .forEach(p -> latest.putIfAbsent(p.getMember().getId(), p));
+
+        BigDecimal pot = Money.of(group.getContributionAmount().multiply(BigDecimal.valueOf(members.size())));
+        List<RotationSlot> slots = new ArrayList<>();
+        // Already had their turn this round, in the order they were paid
+        members.stream()
+                .filter(m -> m.payoutsReceived() > round)
+                .map(m -> latest.get(m.memberId()))
+                .sorted(java.util.Comparator.comparing(Payout::getCreatedAt))
+                .forEach(p -> slots.add(new RotationSlot(slots.size() + 1, p.getMember().getId(), p.getMember().getFullName(),
+                        positionOf(members, p.getMember().getId()), p.getStatus() == PayoutStatus.PAID ? "RECEIVED" : "IN_PROGRESS",
+                        p.getPaidAt() != null ? p.getPaidAt().toLocalDate() : p.getPayoutDate(), p.getAmount())));
+        // Still waiting this round, in payout-position order
+        LocalDate due = nextDueDate(group);
+        List<PayoutContext.MemberPosition> waiting = members.stream()
+                .filter(m -> m.payoutsReceived() == round)
+                .sorted(RotationalPayoutRule.ROTATION_ORDER)
+                .toList();
+        for (int i = 0; i < waiting.size(); i++) {
+            PayoutContext.MemberPosition m = waiting.get(i);
+            slots.add(new RotationSlot(slots.size() + 1, m.memberId(), m.name(), m.payoutPosition(),
+                    i == 0 ? "NEXT" : "UPCOMING", due, pot));
+            due = group.getFrequency().next(due);
+        }
+        return slots;
+    }
+
+    /** The latest money movements in a group: verified contributions and payouts made. */
+    public List<ActivityItem> activity(UUID groupId, int limit) {
+        StokvelGroup group = groups.find(groupId);
+        List<ActivityItem> items = new ArrayList<>();
+        em.createQuery("""
+                        SELECT c FROM Contribution c WHERE c.group = :group AND c.verificationStatus = :verified
+                        ORDER BY c.verifiedAt DESC""", Contribution.class)
+                .setParameter("group", group)
+                .setParameter("verified", VerificationStatus.VERIFIED)
+                .setMaxResults(limit)
+                .getResultStream()
+                .forEach(c -> items.add(new ActivityItem("PAID_IN", c.getMember().getFullName(), c.getAmount(),
+                        c.getPaymentMethod().name(), c.getContributionDate().atStartOfDay())));
+        em.createQuery("SELECT p FROM Payout p WHERE p.group = :group AND p.status = :paid ORDER BY p.paidAt DESC", Payout.class)
+                .setParameter("group", group)
+                .setParameter("paid", PayoutStatus.PAID)
+                .setMaxResults(limit)
+                .getResultStream()
+                .forEach(p -> items.add(new ActivityItem("PAID_OUT", p.getMember().getFullName(), p.getAmount(),
+                        p.getNotes(), p.getPaidAt())));
+        items.sort(java.util.Comparator.comparing(ActivityItem::when).reversed());
+        return items.stream().limit(limit).toList();
+    }
+
+    private static int positionOf(List<PayoutContext.MemberPosition> members, UUID memberId) {
+        return members.stream().filter(m -> m.memberId().equals(memberId)).findFirst()
+                .map(PayoutContext.MemberPosition::payoutPosition).orElse(0);
     }
 
     /** Every member's standing in the group (active first, then former members). */
