@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <!--
-    Page template (Facelets). Every page under /app uses it with <ui:composition template="...">
-    and fills the "content" slot. It lives in WEB-INF so it can't be requested directly.
+    Page template (Facelets), following the StokVault design reference: a sidebar (logo, the group
+    being viewed, navigation, the signed-in user) and a main area (title, subtitle, actions, content).
+    Pages fill the slots: context, sectionNav, heading, subtitle, actions, content.
 -->
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:h="jakarta.faces.html"
-      xmlns:f="jakarta.faces.core"
       xmlns:ui="jakarta.faces.facelets"
       lang="en">
 <ui:insert name="metadata"/>
@@ -16,38 +16,67 @@
     <link rel="icon" href="#{request.contextPath}/resources/brand/favicon.ico" sizes="any"/>
     <link rel="icon" href="#{request.contextPath}/resources/brand/stokvault-1a-favicon.svg" type="image/svg+xml"/>
     <link rel="apple-touch-icon" href="#{request.contextPath}/resources/brand/apple-touch-icon.png"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;display=swap"/>
     <link rel="stylesheet" href="#{request.contextPath}/resources/css/stokvault.css?v=#{fmt.assetVersion}"/>
+    <script src="#{request.contextPath}/resources/js/stokvault.js?v=#{fmt.assetVersion}"></script>
 </h:head>
 <h:body>
-    <header class="topbar">
-        <div class="topbar-inner">
-            <a class="brand" href="#{request.contextPath}/app/index.xhtml" aria-label="StokVault home">
-                <img class="logo-light" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal.svg" alt="StokVault"/>
-                <img class="logo-dark" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal-reversed.svg" alt="StokVault"/>
-            </a>
-            <nav class="nav" aria-label="Main">
-                <a href="#{request.contextPath}/app/index.xhtml" class="#{nav eq 'home' ? 'current' : ''}">My stokvels</a>
-                <ui:fragment rendered="#{user.committee}">
-                    <a href="#{request.contextPath}/app/approvals.xhtml" class="#{nav eq 'approvals' ? 'current' : ''}">Approvals</a>
-                </ui:fragment>
-                <ui:fragment rendered="#{user.admin}">
-                    <a href="#{request.contextPath}/app/admin.xhtml" class="#{nav eq 'admin' ? 'current' : ''}">Coop Office</a>
-                </ui:fragment>
-                <a href="#{request.contextPath}/app/account.xhtml" class="#{nav eq 'account' ? 'current' : ''}">My account</a>
-            </nav>
+<div class="shell">
+    <aside class="sidebar">
+        <a class="brand" href="#{request.contextPath}/app/index.xhtml" aria-label="StokVault home">
+            <img src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal.svg" alt="StokVault"/>
+        </a>
+
+        <ui:insert name="context"/>
+
+        <nav class="side-nav" aria-label="Main">
+            <ui:insert name="sectionNav"/>
+            <span class="nav-label eyebrow">StokVault</span>
+            <a href="#{request.contextPath}/app/index.xhtml" class="#{nav eq 'home' ? 'active' : ''}">My stokvels</a>
+            <ui:fragment rendered="#{user.committee}">
+                <a href="#{request.contextPath}/app/approvals.xhtml" class="#{nav eq 'approvals' ? 'active' : ''}">Approvals</a>
+            </ui:fragment>
+            <ui:fragment rendered="#{user.admin}">
+                <a href="#{request.contextPath}/app/admin.xhtml" class="#{nav eq 'admin' ? 'active' : ''}">Coop Office</a>
+            </ui:fragment>
+            <a href="#{request.contextPath}/app/account.xhtml" class="#{nav eq 'account' ? 'active' : ''}">My account</a>
+        </nav>
+
+        <div class="side-user">
+            <span class="avatar dark">#{fmt.initials(user.me.fullName)}</span>
             <div class="who">
                 <span>#{user.me.fullName}</span>
-                <h:form>
-                    <h:commandButton value="Log out" action="#{user.logout}" styleClass="btn small"/>
-                </h:form>
+                <span>#{user.roleLabel} ·
+                    <h:form style="display:inline"><h:commandLink value="Log out" action="#{user.logout}" styleClass="logout"/></h:form>
+                </span>
             </div>
         </div>
-    </header>
+    </aside>
 
-    <main class="page">
-        <!-- Success and error messages from the last action -->
-        <h:messages globalOnly="true" styleClass="messages" infoClass="msg-info" errorClass="msg-error"/>
-        <ui:insert name="content"/>
+    <main class="main">
+        <header class="page-header">
+            <div>
+                <h1><ui:insert name="heading"/></h1>
+                <div class="subtitle"><ui:insert name="subtitle"/></div>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="btn" onclick="return svToggleAmounts()">
+                    <span class="hide-when-hidden">Hide amounts</span><span class="show-when-hidden">Show amounts</span>
+                </button>
+                <ui:insert name="actions"/>
+            </div>
+        </header>
+        <div class="content">
+            <ui:insert name="content"/>
+        </div>
     </main>
+</div>
+
+<!-- Results of the last action: success fades after a few seconds, errors stay -->
+<div class="toasts" role="status" aria-live="polite">
+    <h:messages globalOnly="true" infoClass="toast-info" errorClass="toast-error" warnClass="toast-error"/>
+</div>
 </h:body>
 </html>

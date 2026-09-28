@@ -188,6 +188,20 @@ change.
 The pages only show buttons a user is allowed to use. The services check every rule again, so hiding a button is
 never the security boundary.
 
+**Design.** The UI follows the StokVault design reference (`StokVault App.dc.html`):
+
+- Archivo typeface and the brand palette
+- A sidebar with the current group and section navigation
+- A deep-green "collection" hero with a progress bar
+- Status pills and initial avatars
+- A cycle-by-cycle contribution grid (paid / paid late / part paid / awaiting verification / outstanding)
+- The rotation list with the next recipient highlighted
+- A "Record payment" dialog with toasts for results
+
+**Hide amounts** masks every rand value on screen, for projecting at a meeting. It's pure Jakarta Faces, with one
+small script (`resources/js/stokvault.js`) for the dialog, toasts and that toggle. Every member of a group can see
+who has paid the current cycle, as the design shows; payment references and full records stay with the officers.
+
 ---
 
 ## 5. Architecture

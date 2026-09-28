@@ -42,6 +42,59 @@ public class Format {
         return dateTime == null ? "" : dateTime.format(DATE_TIME);
     }
 
+    private static final DateTimeFormatter SHORT = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH);
+    private static final DateTimeFormatter WEEKDAY = DateTimeFormatter.ofPattern("EEE d MMM yyyy", Locale.ENGLISH);
+
+    /** "1 Sep" */
+    public String shortDate(LocalDate date) {
+        return date == null ? "" : date.format(SHORT);
+    }
+
+    public String shortDateTime(LocalDateTime dateTime) {
+        return dateTime == null ? "" : dateTime.format(SHORT);
+    }
+
+    /** "Wed 1 Oct 2026" */
+    public String weekday(LocalDate date) {
+        return date == null ? "" : date.format(WEEKDAY);
+    }
+
+    /** "Thandi Mokoena" -> "TM" (for avatars) */
+    public String initials(String name) {
+        if (name == null || name.isBlank()) {
+            return "?";
+        }
+        StringBuilder out = new StringBuilder();
+        for (String part : name.trim().split("\\s+")) {
+            out.append(Character.toUpperCase(part.charAt(0)));
+            if (out.length() == 2) {
+                break;
+            }
+        }
+        return out.toString();
+    }
+
+    /** "Good morning" / "Good afternoon" / "Good evening" */
+    public String greeting() {
+        int hour = LocalDateTime.now().getHour();
+        return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    }
+
+    /** Pill colour for any status value: good (done), warn (needs attention), bad, info or neutral. */
+    public String tone(Object status) {
+        if (status == null) {
+            return "";
+        }
+        return switch (status.toString()) {
+            case "PAID", "VERIFIED", "ACTIVE", "PASSED", "SENT", "RECEIVED", "CONFIRMED", "RECONCILED" -> "good";
+            case "PENDING", "PENDING_REVIEW", "PENDING_APPROVAL", "AWAITING_VERIFICATION", "PARTIAL", "RETRYING",
+                 "OVERRIDDEN", "SUSPENDED", "IN_PROGRESS", "QUEUED" -> "warn";
+            case "REJECTED", "FAILED", "CANCELLED", "OUTSTANDING", "CLOSED" -> "bad";
+            case "SCHEDULED", "DRAFT", "OPEN", "NEXT" -> "info";
+            default -> "";
+        };
+    }
+
     /** First 12 characters of a hash, for display. */
     public String shortHash(String hash) {
         return hash == null || hash.length() < 12 ? hash : hash.substring(0, 12) + "...";

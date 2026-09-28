@@ -5,6 +5,8 @@ import com.stokvault.domain.AuditAction;
 import com.stokvault.domain.CycleStatus;
 import com.stokvault.domain.Money;
 import com.stokvault.domain.MembershipRole;
+import com.stokvault.domain.VerificationStatus;
+import com.stokvault.dto.ContributionMatrix;
 import com.stokvault.dto.CycleGrid;
 import com.stokvault.dto.CycleView;
 import com.stokvault.entity.ContributionCycle;
@@ -23,6 +25,7 @@ import jakarta.persistence.PersistenceContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -152,10 +155,12 @@ public class CycleService {
         return cycle;
     }
 
-    /** The treasurer's grid: every expected payer and where their payment stands. */
+    /**
+     * "Who has paid" for one cycle: every expected payer and where their payment stands. Visible
+     * to every member of the group (transparency); payment references stay with the officers.
+     */
     public CycleGrid grid(UUID groupId, UUID cycleId) {
         StokvelGroup group = groups.find(groupId);
-        access.requireRoleOrAdmin(group, MembershipRole.TREASURER, MembershipRole.COMMITTEE);
         ContributionCycle cycle = find(group, cycleId);
         Map<UUID, BigDecimal> verified = ledger.verifiedByMember(cycle);
         Map<UUID, BigDecimal> waiting = ledger.unresolvedByMember(cycle);
@@ -165,6 +170,68 @@ public class CycleService {
                 .map(ms -> row(ms, cycle.getAmountDue(), verified, waiting))
                 .toList();
         return new CycleGrid(ledger.view(cycle), rows);
+    }
+
+    /**
+     * The contributions grid over the last {@code count} cycles: for each active member and cycle,
+     * whether they paid in full on time, late, partly, are awaiting verification, or haven't paid.
+     */
+    public ContributionMatrix matrix(UUID groupId, int count) {
+        StokvelGroup group = groups.find(groupId);
+        List<ContributionCycle> recent = cycles(group).stream().limit(count).toList().reversed();
+        if (recent.isEmpty()) {
+            return new ContributionMatrix(List.of(), List.of());
+        }
+
+        // Per (member, cycle): verified total, latest verified payment date, unresolved total
+        Map<String, BigDecimal> verified = new HashMap<>();
+        Map<String, LocalDate> lastVerifiedDate = new HashMap<>();
+        Map<String, BigDecimal> unresolved = new HashMap<>();
+        em.createQuery("""
+                        SELECT c.member.id, c.cycle.id, c.verificationStatus, SUM(c.amount), MAX(c.contributionDate)
+                        FROM Contribution c WHERE c.group = :group AND c.cycle IN :cycles
+                        GROUP BY c.member.id, c.cycle.id, c.verificationStatus""", Object[].class)
+                .setParameter("group", group)
+                .setParameter("cycles", recent)
+                .getResultStream()
+                .forEach(r -> {
+                    String key = r[0] + ":" + r[1];
+                    VerificationStatus status = (VerificationStatus) r[2];
+                    if (status == VerificationStatus.VERIFIED) {
+                        verified.put(key, Money.of((BigDecimal) r[3]));
+                        lastVerifiedDate.put(key, (LocalDate) r[4]);
+                    } else if (status.isUnresolved()) {
+                        unresolved.merge(key, Money.of((BigDecimal) r[3]), BigDecimal::add);
+                    }
+                });
+
+        List<ContributionMatrix.Column> columns = recent.stream()
+                .map(c -> new ContributionMatrix.Column(c.getId(), c.getCycleNumber(), c.getDueDate(),
+                        c.getDueDate().getMonth().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH)))
+                .toList();
+        List<ContributionMatrix.Row> rows = memberships.list(groupId, false).stream().map(ms -> {
+            UUID memberId = ms.getMember().getId();
+            BigDecimal total = Money.ZERO;
+            List<String> cells = new java.util.ArrayList<>();
+            for (ContributionCycle c : recent) {
+                String key = memberId + ":" + c.getId();
+                BigDecimal paid = verified.getOrDefault(key, Money.ZERO);
+                total = total.add(paid);
+                if (ms.getJoinedDate().isAfter(c.getDueDate())) {
+                    cells.add("NONE");
+                } else if (paid.compareTo(c.getAmountDue()) >= 0) {
+                    cells.add(lastVerifiedDate.get(key).isAfter(c.getDueDate()) ? "LATE" : "PAID");
+                } else if (unresolved.containsKey(key)) {
+                    cells.add("AWAITING");
+                } else if (paid.signum() > 0) {
+                    cells.add("PARTIAL");
+                } else {
+                    cells.add("OUTSTANDING");
+                }
+            }
+            return new ContributionMatrix.Row(memberId, ms.getMember().getFullName(), ms.getPayoutPosition(), cells, total);
+        }).toList();
+        return new ContributionMatrix(columns, rows);
     }
 
     private static CycleGrid.Row row(Membership ms, BigDecimal due, Map<UUID, BigDecimal> verified,
