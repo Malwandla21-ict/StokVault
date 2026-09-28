@@ -6,14 +6,18 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.NamedQuery;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.time.LocalDateTime;
+
 /**
- * A stokvel member. Each Member object corresponds to one row in the "members" table.
+ * A person registered on StokVault. Each Member object corresponds to one row in the "members" table.
+ * A member joins stokvels through Membership rows.
  */
 // @Entity: tells JPA this class is stored in the database
 @Entity
@@ -33,9 +37,8 @@ public class Member {
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "member_seq")
     private Long id;
 
-    // @NotBlank / @Size / @Email are Bean Validation rules. They are checked
-    // automatically when a request body is marked @Valid (see MemberResource)
-    // and again by JPA before the row is saved.
+    // @NotBlank / @Size / @Email are Bean Validation rules. JPA checks them automatically
+    // before a row is inserted or updated.
     @NotBlank
     @Size(max = 100)
     // @Column: column settings. nullable = false adds a NOT NULL constraint.
@@ -49,21 +52,26 @@ public class Member {
     @Column(nullable = false, unique = true)
     private String email;
 
-    // JPA (and JSON-B) need a public or protected no-argument constructor
-    public Member() {
+    @Size(max = 20)
+    @Column(length = 20)
+    private String phone;
+
+    // updatable = false: JPA never changes this column after the first insert
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    // @PrePersist: JPA calls this method just before the row is first inserted
+    @PrePersist
+    void onCreate() {
+        createdAt = LocalDateTime.now();
     }
 
-    public Member(String name, String email) {
-        this.name = name;
-        this.email = email;
+    // JPA needs a public or protected no-argument constructor
+    public Member() {
     }
 
     public Long getId() {
         return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public String getName() {
@@ -80,5 +88,17 @@ public class Member {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 }

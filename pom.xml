@@ -42,6 +42,17 @@
             <version>42.7.7</version>
             <scope>provided</scope>
         </dependency>
+
+        <!--
+            JUnit 5 for unit tests (src/test/java). "test" scope: used only by `mvn test` /
+            `mvn package`, never included in the WAR.
+        -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -52,6 +63,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
+            </plugin>
+            <!-- Runs the JUnit tests during the build; a failing test stops the WAR being built -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
