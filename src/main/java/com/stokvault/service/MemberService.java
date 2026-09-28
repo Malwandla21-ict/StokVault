@@ -20,6 +20,8 @@ import com.stokvault.security.Roles;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
@@ -51,7 +53,7 @@ public class MemberService {
      * password: they sign in the first time with an SMS code and then choose one.
      */
     @RolesAllowed({Roles.ADMIN, Roles.TREASURER, Roles.COMMITTEE})
-    public Member register(MemberRegistration registration) {
+    public Member register(@Valid @NotNull MemberRegistration registration) {
         String nationalId = registration.nationalId().trim();
         if (!SaIdNumber.isValid(nationalId)) {
             throw new InvalidRequestException(SaIdNumber.mask(nationalId) + " is not a valid South African ID number");
@@ -132,7 +134,7 @@ public class MemberService {
     }
 
     /** Members update their own contact details; admins can update anyone's. */
-    public Member update(UUID id, MemberUpdate update) {
+    public Member update(UUID id, @Valid @NotNull MemberUpdate update) {
         Member member = find(id);
         if (!access.isAdmin() && !member.getId().equals(access.currentMember().getId())) {
             throw new AccessDeniedException("You can only change your own details");

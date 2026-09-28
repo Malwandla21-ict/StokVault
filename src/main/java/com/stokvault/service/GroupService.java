@@ -16,6 +16,8 @@ import com.stokvault.security.Roles;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
@@ -89,7 +91,7 @@ public class GroupService {
 
     /** Register / Configure Group (SDD use case, Coop Office Admin). New groups start as DRAFT. */
     @RolesAllowed(Roles.ADMIN)
-    public StokvelGroup create(GroupRequest request) {
+    public StokvelGroup create(@Valid @NotNull GroupRequest request) {
         requireUniqueName(request.name(), null);
         StokvelGroup group = new StokvelGroup();
         apply(group, request);
@@ -100,7 +102,7 @@ public class GroupService {
     }
 
     /** Admins and the group's treasurer can change the configuration; the type is fixed once active. */
-    public StokvelGroup update(UUID id, GroupRequest request) {
+    public StokvelGroup update(UUID id, @Valid @NotNull GroupRequest request) {
         StokvelGroup group = find(id);
         access.requireRoleOrAdmin(group, MembershipRole.TREASURER);
         if (group.getStatus() == GroupStatus.CLOSED) {

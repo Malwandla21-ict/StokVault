@@ -133,7 +133,10 @@ function Wait-Eligibility($group, $payout, $cred) {
 # ---- start ----------------------------------------------------------------------------------
 
 if (-not $AdminPassword) {
-    $m = [regex]::Matches((Read-LogFrom 0), "one-time generated password: (\S+)\.")
+    # Payara rotates server.log, so search the older log files too
+    $allLogs = (Get-ChildItem (Split-Path $ServerLog) -Filter "server.log*" | Sort-Object LastWriteTime | ForEach-Object {
+        $fs = [IO.File]::Open($_.FullName, 'Open', 'Read', 'ReadWrite'); try { (New-Object IO.StreamReader($fs)).ReadToEnd() } finally { $fs.Close() } }) -join "`n"
+    $m = [regex]::Matches($allLogs, "one-time generated password: (\S+)\.")
     if ($m.Count -eq 0) { throw "Pass -AdminPassword (the admin password isn't in $ServerLog)" }
     $AdminPassword = $m[$m.Count - 1].Groups[1].Value
 }

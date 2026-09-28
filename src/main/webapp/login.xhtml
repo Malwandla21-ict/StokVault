@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!--
+    Login (SDD 7.1): phone number + password, or phone number + a one-time code sent by SMS for
+    members who struggle to remember passwords. The credentials go to Jakarta Security via LoginBean.
+-->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:f="jakarta.faces.core"
+      xmlns:pt="jakarta.faces.passthrough"
+      lang="en">
+<f:metadata>
+    <f:viewParam name="next" value="#{loginBean.next}"/>
+</f:metadata>
+<h:head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Log in · StokVault</title>
+    <link rel="icon" href="#{request.contextPath}/resources/brand/favicon.ico" sizes="any"/>
+    <link rel="icon" href="#{request.contextPath}/resources/brand/stokvault-1a-favicon.svg" type="image/svg+xml"/>
+    <link rel="stylesheet" href="#{request.contextPath}/resources/css/stokvault.css?v=#{fmt.assetVersion}"/>
+</h:head>
+<h:body styleClass="login-page">
+    <main class="login-card">
+        <img class="logo logo-light" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal.svg" alt="StokVault"/>
+        <img class="logo logo-dark" src="#{request.contextPath}/resources/brand/stokvault-1a-lockup-horizontal-reversed.svg" alt="StokVault"/>
+        <h1>Welcome back</h1>
+        <p class="lead">Transparent contributions and payouts for your stokvel.</p>
+
+        <h:panelGroup layout="block" styleClass="callout info" rendered="#{param.loggedOut eq 'true'}">You have logged out.</h:panelGroup>
+        <h:panelGroup layout="block" styleClass="callout warn" rendered="#{param.expired eq 'true'}">Your session expired. Please log in again.</h:panelGroup>
+        <h:messages globalOnly="true" styleClass="messages" infoClass="msg-info" errorClass="msg-error"/>
+
+        <h:form id="login" styleClass="form">
+            <div class="field">
+                <h:outputLabel for="phone" value="Phone number"/>
+                <h:inputText id="phone" value="#{loginBean.phoneNumber}" pt:type="tel" pt:autocomplete="username"
+                             pt:inputmode="tel" pt:placeholder="082 123 4567" pt:autofocus="autofocus"/>
+            </div>
+
+            <h:panelGroup layout="block" styleClass="stack" rendered="#{not loginBean.codeSent}">
+                <div class="field">
+                    <h:outputLabel for="password" value="Password"/>
+                    <h:inputSecret id="password" value="#{loginBean.password}" pt:autocomplete="current-password"/>
+                </div>
+                <h:commandButton value="Log in" action="#{loginBean.login}" styleClass="btn primary" style="width:100%"/>
+                <div class="divider">or</div>
+                <h:commandButton value="Text me a login code" action="#{loginBean.sendCode}" styleClass="btn" style="width:100%"/>
+                <p class="muted" style="font-size:.85rem;margin:0">New members: use a login code the first time, then choose a password.</p>
+            </h:panelGroup>
+
+            <h:panelGroup layout="block" styleClass="stack" rendered="#{loginBean.codeSent}">
+                <div class="field">
+                    <h:outputLabel for="code" value="6-digit code from the SMS"/>
+                    <h:inputText id="code" value="#{loginBean.code}" pt:inputmode="numeric" pt:autocomplete="one-time-code"
+                                 pt:maxlength="6" pt:autofocus="autofocus"/>
+                </div>
+                <h:commandButton value="Log in with code" action="#{loginBean.loginWithCode}" styleClass="btn primary" style="width:100%"/>
+                <h:commandButton value="Send a new code" action="#{loginBean.useCode}" styleClass="btn link"/>
+            </h:panelGroup>
+        </h:form>
+    </main>
+</h:body>
+</html>

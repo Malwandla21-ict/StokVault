@@ -1,3 +1,5 @@
 target/
+# docker-compose secrets
+.env
 .idea/
 *.iml

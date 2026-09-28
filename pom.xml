@@ -55,6 +55,15 @@
     <build>
         <!-- target/stokvault.war, served by Payara at /stokvault -->
         <finalName>stokvault</finalName>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <!-- The branding kit is served as web content (see maven-war-plugin), not put on the classpath -->
+                <excludes>
+                    <exclude>assets/**</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -98,6 +107,15 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-war-plugin</artifactId>
                 <version>3.4.0</version>
+                <configuration>
+                    <!-- Serve the branding kit to browsers at /stokvault/resources/brand/... -->
+                    <webResources>
+                        <resource>
+                            <directory>src/main/resources/assets/branding</directory>
+                            <targetPath>resources/brand</targetPath>
+                        </resource>
+                    </webResources>
+                </configuration>
             </plugin>
         </plugins>
     </build>

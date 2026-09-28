@@ -1,0 +1,583 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough"
+                template="/WEB-INF/templates/layout.xhtml">
+    <!--
+        One group's workspace: the Treasurer dashboard (cycle grid, verification, payout runs),
+        the Committee's approvals and overrides, and the Member view, depending on the user's role.
+    -->
+    <ui:define name="metadata">
+        <f:metadata>
+            <f:viewParam name="id" value="#{groupBean.id}"/>
+            <f:viewParam name="tab" value="#{groupBean.tab}"/>
+            <f:viewAction action="#{groupBean.load}"/>
+        </f:metadata>
+    </ui:define>
+    <ui:param name="nav" value="home"/>
+    <ui:param name="g" value="#{groupBean.summary.group}"/>
+    <ui:param name="base" value="group.xhtml?id=#{groupBean.id}"/>
+    <ui:param name="api" value="#{request.contextPath}/api/groups/#{groupBean.id}"/>
+    <ui:define name="title">#{groupBean.summary.group.name}</ui:define>
+
+    <ui:define name="content">
+    <ui:fragment rendered="#{groupBean.summary ne null}">
+        <div class="page-head">
+            <div>
+                <h1>#{g.name}
+                    <span class="badge #{g.status eq 'ACTIVE' ? 'good' : (g.status eq 'DRAFT' ? 'info' : 'warn')}">#{fmt.label(g.status)}</span>
+                </h1>
+                <p>#{fmt.label(g.type)} stokvel · #{fmt.rand(g.contributionAmount)} #{fmt.label(g.frequency).toLowerCase()} from #{fmt.date(g.startDate)}
+                    <ui:fragment rendered="#{g.myRole ne null}"> · you are <strong>#{fmt.label(g.myRole).toLowerCase()}</strong></ui:fragment>
+                </p>
+                <ui:fragment rendered="#{not empty g.description}"><p>#{g.description}</p></ui:fragment>
+            </div>
+        </div>
+
+        <!-- Headline figures -->
+        <div class="stats">
+            <div class="stat good"><div class="label">Balance</div><div class="value">#{fmt.rand(groupBean.summary.balance)}</div></div>
+            <div class="stat"><div class="label">Verified contributions</div><div class="value">#{fmt.rand(groupBean.summary.totalVerified)}</div></div>
+            <div class="stat"><div class="label">Paid out</div><div class="value">#{fmt.rand(groupBean.summary.totalPaidOut)}</div></div>
+            <div class="stat"><div class="label">Payouts in progress</div><div class="value">#{fmt.rand(groupBean.summary.openPayoutsTotal)}</div></div>
+            <ui:fragment rendered="#{groupBean.officer}">
+                <div class="stat #{fmt.positive(groupBean.summary.totalArrears) ? 'warn' : ''}"><div class="label">Arrears</div><div class="value">#{fmt.rand(groupBean.summary.totalArrears)}</div></div>
+                <div class="stat #{groupBean.summary.awaitingVerification gt 0 ? 'warn' : ''}"><div class="label">Awaiting verification</div><div class="value">#{groupBean.summary.awaitingVerification}</div></div>
+            </ui:fragment>
+        </div>
+
+        <h:panelGroup layout="block" styleClass="callout info" rendered="#{g.status eq 'DRAFT'}">
+            <strong>This group is a draft.</strong> Add its members and appoint a treasurer on the Members tab, then activate it.
+            <h:form rendered="#{groupBean.treasurer or groupBean.admin}" style="margin-top:10px">
+                <h:commandButton value="Activate group" action="#{groupBean.activate}" styleClass="btn primary small"/>
+            </h:form>
+        </h:panelGroup>
+        <h:panelGroup layout="block" styleClass="callout warn" rendered="#{g.status eq 'SUSPENDED'}">
+            <strong>This group is suspended.</strong> No contributions or payouts can be processed until the Coop Office resumes it.
+        </h:panelGroup>
+        <h:panelGroup layout="block" styleClass="callout good" rendered="#{groupBean.summary.nextPayout ne null}">
+            <strong>Next in the rotation:</strong> #{groupBean.summary.nextPayout.memberName} (position #{groupBean.summary.nextPayout.payoutPosition}),
+            about #{fmt.rand(groupBean.summary.nextPayout.estimatedAmount)} around #{fmt.date(groupBean.summary.nextPayout.estimatedDate)}.
+        </h:panelGroup>
+
+        <nav class="tabs" aria-label="Group sections">
+            <a href="#{base}&amp;tab=overview" class="#{groupBean.tab eq 'overview' ? 'current' : ''}">Overview</a>
+            <a href="#{base}&amp;tab=contributions" class="#{groupBean.tab eq 'contributions' ? 'current' : ''}">Contributions</a>
+            <a href="#{base}&amp;tab=payouts" class="#{groupBean.tab eq 'payouts' ? 'current' : ''}">Payouts</a>
+            <a href="#{base}&amp;tab=members" class="#{groupBean.tab eq 'members' ? 'current' : ''}">Members</a>
+            <ui:fragment rendered="#{groupBean.officer}">
+                <a href="#{base}&amp;tab=audit" class="#{groupBean.tab eq 'audit' ? 'current' : ''}">Audit &amp; reports</a>
+                <a href="#{base}&amp;tab=settings" class="#{groupBean.tab eq 'settings' ? 'current' : ''}">Settings</a>
+            </ui:fragment>
+        </nav>
+
+        <!-- =============================== OVERVIEW =============================== -->
+        <ui:fragment rendered="#{groupBean.tab eq 'overview'}">
+            <div class="grid-2">
+                <section class="card">
+                    <h2>Current cycle</h2>
+                    <ui:fragment rendered="#{groupBean.summary.currentCycle eq null}"><p class="muted">No contribution cycle has been opened yet.</p></ui:fragment>
+                    <ui:fragment rendered="#{groupBean.summary.currentCycle ne null}">
+                        <!-- (a page-wide alias, so it must not reuse a loop variable name like "c") -->
+                        <ui:param name="current" value="#{groupBean.summary.currentCycle}"/>
+                        <dl class="facts">
+                            <dt>Cycle</dt><dd>#{current.cycleNumber} <span class="badge #{current.status eq 'OPEN' ? 'good' : ''}">#{fmt.label(current.status)}</span></dd>
+                            <dt>Due</dt><dd>#{fmt.date(current.dueDate)}</dd>
+                            <dt>Amount due</dt><dd>#{fmt.rand(current.amountDue)} per member</dd>
+                            <dt>Paid in full</dt><dd>#{current.completionPercent}% of members</dd>
+                            <dt>Collected</dt><dd>#{fmt.rand(current.verifiedTotal)}</dd>
+                        </dl>
+                    </ui:fragment>
+                </section>
+
+                <!-- Members report their own payments; the treasurer verifies them -->
+                <ui:fragment rendered="#{groupBean.memberOfGroup and groupBean.activeGroup and groupBean.cycleOpen}">
+                    <section class="card">
+                        <h2>I've paid</h2>
+                        <p class="muted">Tell the treasurer about a payment you made. It counts once they've verified it against the bank statement.</p>
+                        <h:form styleClass="form">
+                            <div class="field"><h:outputLabel for="amt" value="Amount (R)"/>
+                                <h:inputText id="amt" value="#{groupBean.amount}" pt:type="number" pt:step="0.01" pt:inputmode="decimal"/></div>
+                            <div class="field"><h:outputLabel for="ref" value="Payment reference"/>
+                                <h:inputText id="ref" value="#{groupBean.reference}" pt:placeholder="e.g. the bank reference or receipt number"/></div>
+                            <div class="field"><h:outputLabel for="when" value="Date paid"/>
+                                <h:inputText id="when" value="#{groupBean.paidOn}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                            <div class="field"><h:outputLabel for="how" value="How"/>
+                                <h:selectOneMenu id="how" value="#{groupBean.method}">
+                                    <f:selectItems value="#{groupBean.paymentMethods}" var="m" itemLabel="#{fmt.label(m)}" itemValue="#{m}"/>
+                                </h:selectOneMenu></div>
+                            <h:commandButton value="Report payment" action="#{groupBean.recordContribution}" styleClass="btn primary"/>
+                        </h:form>
+                    </section>
+                </ui:fragment>
+            </div>
+
+            <h2 style="margin-top:24px">#{groupBean.officer ? 'Member standings' : 'My standing'}</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th class="num">Pos</th><th>Member</th><th>Role</th><th class="num">Paid in</th><th class="num">Arrears</th><th class="num">Received</th><th></th></tr></thead>
+                    <tbody>
+                    <ui:repeat value="#{groupBean.summary.members}" var="s">
+                        <tr style="#{s.status eq 'ACTIVE' ? '' : 'opacity:.6'}">
+                            <td class="num">#{s.status eq 'ACTIVE' ? s.payoutPosition : '-'}</td>
+                            <td>#{s.name}<ui:fragment rendered="#{s.status ne 'ACTIVE'}"><span class="sub">left the group</span></ui:fragment></td>
+                            <td>#{fmt.label(s.role)}</td>
+                            <td class="num">#{fmt.rand(s.totalVerified)}</td>
+                            <td class="num" style="color:#{fmt.positive(s.arrears) ? 'var(--warn)' : 'inherit'};font-weight:#{fmt.positive(s.arrears) ? 700 : 400}">#{fmt.rand(s.arrears)}</td>
+                            <td class="num">#{fmt.rand(s.totalReceived)}</td>
+                            <td class="actions">
+                                <a class="btn small" href="#{api}/reports/members/#{s.memberId}/statement?format=pdf">Statement</a>
+                            </td>
+                        </tr>
+                    </ui:repeat>
+                    </tbody>
+                </table>
+            </div>
+        </ui:fragment>
+
+        <!-- ============================ CONTRIBUTIONS ============================ -->
+        <ui:fragment rendered="#{groupBean.tab eq 'contributions'}">
+            <div class="stack">
+            <!-- Treasurer: cycle controls -->
+            <ui:fragment rendered="#{groupBean.treasurer and groupBean.activeGroup}">
+                <section class="card">
+                    <h2>Contribution cycle</h2>
+                    <h:form styleClass="row" rendered="#{not groupBean.cycleOpen}">
+                        <span class="muted">No cycle is open.</span>
+                        <h:inputText value="#{groupBean.newCycleDue}" pt:type="date" pt:aria-label="Due date (optional)" style="max-width:190px">
+                            <f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText>
+                        <h:commandButton value="Open next cycle" action="#{groupBean.openCycle}" styleClass="btn primary"/>
+                        <small>Leave the date empty to follow on from the last cycle.</small>
+                    </h:form>
+                    <h:form styleClass="row" rendered="#{groupBean.cycleOpen}">
+                        <span>Cycle #{groupBean.summary.currentCycle.cycleNumber} is open, due #{fmt.date(groupBean.summary.currentCycle.dueDate)}.</span>
+                        <h:commandButton value="Close cycle" action="#{groupBean.closeCycle(groupBean.summary.currentCycle.id)}" styleClass="btn"
+                                         pt:onclick="return confirm('Close this cycle? No more contributions can be recorded against it.')"/>
+                    </h:form>
+                </section>
+            </ui:fragment>
+
+            <!-- Officers: who has paid -->
+            <ui:fragment rendered="#{groupBean.grid ne null}">
+                <section>
+                    <h2>Cycle #{groupBean.grid.cycle.cycleNumber}: who has paid (#{groupBean.grid.cycle.completionPercent}%)</h2>
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th class="num">Pos</th><th>Member</th><th class="num">Due</th><th class="num">Verified</th><th class="num">Awaiting check</th><th>Status</th></tr></thead>
+                            <tbody>
+                            <ui:repeat value="#{groupBean.grid.rows}" var="r">
+                                <tr>
+                                    <td class="num">#{r.payoutPosition}</td>
+                                    <td>#{r.memberName}</td>
+                                    <td class="num">#{fmt.rand(r.amountDue)}</td>
+                                    <td class="num">#{fmt.rand(r.verified)}</td>
+                                    <td class="num">#{fmt.positive(r.awaitingVerification) ? fmt.rand(r.awaitingVerification) : ''}</td>
+                                    <td><span class="badge #{r.status eq 'PAID' ? 'good' : (r.status eq 'OUTSTANDING' ? 'danger' : 'warn')}">#{fmt.label(r.status)}</span></td>
+                                </tr>
+                            </ui:repeat>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </ui:fragment>
+
+            <!-- Record a contribution -->
+            <ui:fragment rendered="#{groupBean.activeGroup and groupBean.cycleOpen and groupBean.memberOfGroup}">
+                <section class="card">
+                    <h2>#{groupBean.treasurer ? 'Record a contribution' : 'Report a payment I made'}</h2>
+                    <p class="muted">#{groupBean.treasurer
+                        ? 'Payments you record are verified immediately, unless the amount or reference looks wrong, in which case they are flagged for review. Your own payments must be verified by a committee member.'
+                        : 'The treasurer verifies it against the bank statement.'}</p>
+                    <h:form styleClass="form inline">
+                        <h:panelGroup layout="block" styleClass="field" rendered="#{groupBean.treasurer}">
+                            <h:outputLabel for="payer" value="Member"/>
+                            <h:selectOneMenu id="payer" value="#{groupBean.payerId}">
+                                <f:selectItem itemLabel="Me" itemValue="#{null}"/>
+                                <f:selectItems value="#{groupBean.otherActiveMembers}" var="m" itemLabel="#{m.memberName}" itemValue="#{m.memberId}"/>
+                            </h:selectOneMenu>
+                        </h:panelGroup>
+                        <div class="field"><h:outputLabel for="amount" value="Amount (R)"/>
+                            <h:inputText id="amount" value="#{groupBean.amount}" pt:type="number" pt:step="0.01" pt:inputmode="decimal"/></div>
+                        <div class="field"><h:outputLabel for="reference" value="Payment reference"/>
+                            <h:inputText id="reference" value="#{groupBean.reference}"/></div>
+                        <div class="field"><h:outputLabel for="method" value="Method"/>
+                            <h:selectOneMenu id="method" value="#{groupBean.method}">
+                                <f:selectItems value="#{groupBean.paymentMethods}" var="m" itemLabel="#{fmt.label(m)}" itemValue="#{m}"/>
+                            </h:selectOneMenu></div>
+                        <div class="field"><h:outputLabel for="date" value="Date paid"/>
+                            <h:inputText id="date" value="#{groupBean.paidOn}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                        <h:commandButton value="Save" action="#{groupBean.recordContribution}" styleClass="btn primary"/>
+                    </h:form>
+                </section>
+            </ui:fragment>
+
+            <!-- Officers: verification queue -->
+            <ui:fragment rendered="#{(groupBean.treasurer or groupBean.committee) and not empty groupBean.unresolved}">
+                <section>
+                    <h2>Waiting for verification</h2>
+                    <div class="table-wrap">
+                        <h:form>
+                        <table class="data">
+                            <thead><tr><th>Member</th><th>Cycle</th><th class="num">Amount</th><th>Reference</th><th>Status</th><th>Note / reason</th><th></th></tr></thead>
+                            <tbody>
+                            <ui:repeat value="#{groupBean.unresolved}" var="c">
+                                <tr>
+                                    <td>#{c.memberName}<span class="sub">#{fmt.date(c.contributionDate)} · #{fmt.label(c.paymentMethod)}</span></td>
+                                    <td>#{c.cycleNumber}</td>
+                                    <td class="num">#{fmt.rand(c.amount)}</td>
+                                    <td>#{c.paymentReference}</td>
+                                    <td><span class="badge warn">#{fmt.label(c.verificationStatus)}</span>
+                                        <ui:fragment rendered="#{not empty c.reviewNote}"><span class="sub">#{c.reviewNote}</span></ui:fragment></td>
+                                    <td><h:inputText value="#{groupBean.notes[c.id]}" pt:placeholder="Required to reject" pt:aria-label="Note"/></td>
+                                    <td class="actions">
+                                        <ui:fragment rendered="#{groupBean.canVerify(c)}">
+                                            <h:commandButton value="Verify" action="#{groupBean.verify(c.id)}" styleClass="btn small primary"/>
+                                            <h:commandButton value="Reject" action="#{groupBean.reject(c.id)}" styleClass="btn small danger"/>
+                                        </ui:fragment>
+                                        <ui:fragment rendered="#{not groupBean.canVerify(c)}"><small>Another officer must verify</small></ui:fragment>
+                                    </td>
+                                </tr>
+                            </ui:repeat>
+                            </tbody>
+                        </table>
+                        </h:form>
+                    </div>
+                </section>
+            </ui:fragment>
+
+            <section>
+                <h2>#{groupBean.officer ? 'All contributions' : 'My contributions'}</h2>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Date</th><th>Member</th><th>Cycle</th><th class="num">Amount</th><th>Reference</th><th>Status</th><th>Verified by</th></tr></thead>
+                        <tbody>
+                        <ui:repeat value="#{groupBean.contributionList}" var="c">
+                            <tr>
+                                <td>#{fmt.date(c.contributionDate)}</td>
+                                <td>#{c.memberName}</td>
+                                <td>#{c.cycleNumber}</td>
+                                <td class="num">#{fmt.rand(c.amount)}</td>
+                                <td>#{c.paymentReference}</td>
+                                <td><span class="badge #{c.verificationStatus eq 'VERIFIED' ? 'good' : (c.verificationStatus eq 'REJECTED' ? 'danger' : 'warn')}">#{fmt.label(c.verificationStatus)}</span></td>
+                                <td>#{c.verifiedBy}</td>
+                            </tr>
+                        </ui:repeat>
+                        </tbody>
+                    </table>
+                    <h:panelGroup rendered="#{empty groupBean.contributionList}"><p class="empty">No contributions yet.</p></h:panelGroup>
+                </div>
+            </section>
+
+            <section>
+                <h2>Cycles</h2>
+                <div class="table-wrap">
+                    <h:form>
+                    <table class="data">
+                        <thead><tr><th>Cycle</th><th>Due</th><th class="num">Due per member</th><th class="num">Collected</th><th class="num">Paid in full</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                        <ui:repeat value="#{groupBean.cycleList}" var="c">
+                            <tr>
+                                <td>#{c.cycleNumber}</td>
+                                <td>#{fmt.date(c.dueDate)}</td>
+                                <td class="num">#{fmt.rand(c.amountDue)}</td>
+                                <td class="num">#{fmt.rand(c.verifiedTotal)}</td>
+                                <td class="num">#{c.completionPercent}%</td>
+                                <td><span class="badge #{c.status eq 'OPEN' ? 'good' : (c.status eq 'RECONCILED' ? 'info' : '')}">#{fmt.label(c.status)}</span>
+                                    <ui:fragment rendered="#{c.awaitingVerification gt 0}"><span class="sub">#{c.awaitingVerification} awaiting verification</span></ui:fragment></td>
+                                <td class="actions">
+                                    <h:commandButton rendered="#{groupBean.treasurer and c.status eq 'CLOSED'}" value="Reconcile" action="#{groupBean.reconcileCycle(c.id)}" styleClass="btn small"/>
+                                </td>
+                            </tr>
+                        </ui:repeat>
+                        </tbody>
+                    </table>
+                    </h:form>
+                    <h:panelGroup rendered="#{empty groupBean.cycleList}"><p class="empty">No cycles yet.</p></h:panelGroup>
+                </div>
+            </section>
+            </div>
+        </ui:fragment>
+
+        <!-- =============================== PAYOUTS =============================== -->
+        <ui:fragment rendered="#{groupBean.tab eq 'payouts'}">
+            <div class="stack">
+            <ui:fragment rendered="#{groupBean.treasurer and groupBean.activeGroup}">
+                <section class="card">
+                    <h2>Initiate payout</h2>
+                    <p class="muted">
+                        <ui:fragment rendered="#{g.type eq 'ROTATIONAL'}">Pays the latest cycle's verified collection to the next member in the rotation.</ui:fragment>
+                        <ui:fragment rendered="#{g.type eq 'GROCERY'}">Shares the pool equally between all active members.</ui:fragment>
+                        <ui:fragment rendered="#{g.type eq 'INVESTMENT'}">Distributes the pool pro rata to what each member contributed.</ui:fragment>
+                        <ui:fragment rendered="#{g.type eq 'BURIAL'}">Processes a funeral claim: pays the group's fixed benefit (#{fmt.rand(g.benefitAmount)}) to the member's household.</ui:fragment>
+                        The automated eligibility check runs straight after, and payouts above #{fmt.rand(g.approvalThreshold)} need a committee member's approval.
+                    </p>
+                    <h:form styleClass="form inline">
+                        <h:panelGroup layout="block" styleClass="field" rendered="#{g.type eq 'BURIAL'}">
+                            <h:outputLabel for="ben" value="Claim for"/>
+                            <h:selectOneMenu id="ben" value="#{groupBean.beneficiaryId}">
+                                <f:selectItems value="#{groupBean.activeMembers}" var="m" itemLabel="#{m.memberName}" itemValue="#{m.memberId}"/>
+                            </h:selectOneMenu>
+                        </h:panelGroup>
+                        <h:panelGroup layout="block" styleClass="field" rendered="#{g.type eq 'GROCERY' or g.type eq 'INVESTMENT'}">
+                            <h:outputLabel for="pool" value="Amount to distribute (R)"/>
+                            <h:inputText id="pool" value="#{groupBean.amountToDistribute}" pt:type="number" pt:step="0.01" pt:placeholder="Whole balance"/>
+                        </h:panelGroup>
+                        <div class="field"><h:outputLabel for="pdate" value="Payout date"/>
+                            <h:inputText id="pdate" value="#{groupBean.payoutDate}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                        <div class="field"><h:outputLabel for="pnotes" value="Notes"/>
+                            <h:inputText id="pnotes" value="#{groupBean.runNotes}"/></div>
+                        <h:commandButton value="Schedule payout" action="#{groupBean.runPayout}" styleClass="btn primary"/>
+                    </h:form>
+                </section>
+            </ui:fragment>
+
+            <section>
+                <div class="row" style="justify-content:space-between;margin-bottom:8px">
+                    <h2 style="margin:0">Payouts</h2>
+                    <h:form rendered="#{groupBean.treasurer or groupBean.committee}">
+                        <h:commandButton value="Re-run eligibility check" action="#{groupBean.checkEligibility}" styleClass="btn small"/>
+                        <a class="btn small" href="#{base}&amp;tab=payouts">Refresh</a>
+                    </h:form>
+                </div>
+                <div class="table-wrap">
+                    <h:form>
+                    <table class="data">
+                        <thead><tr><th>Recipient</th><th class="num">Amount</th><th>Status</th><th>Eligibility check</th><th>Approvals</th><th>Reason</th><th></th></tr></thead>
+                        <tbody>
+                        <ui:repeat value="#{groupBean.payoutList}" var="p">
+                            <tr>
+                                <td>#{p.memberName}<span class="sub">#{p.cycleNumber ne null ? 'Cycle '.concat(p.cycleNumber.toString()).concat(' · ') : ''}#{fmt.date(p.payoutDate)}</span>
+                                    <ui:fragment rendered="#{not empty p.notes}"><span class="sub">#{p.notes}</span></ui:fragment></td>
+                                <td class="num">#{fmt.rand(p.amount)}<ui:fragment rendered="#{p.requiresApproval}"><span class="sub">needs approval</span></ui:fragment></td>
+                                <td><span class="badge #{p.status eq 'PAID' ? 'good' : (p.status eq 'CANCELLED' ? 'danger' : (p.status eq 'PENDING_APPROVAL' ? 'warn' : 'info'))}">#{fmt.label(p.status)}</span></td>
+                                <td class="wrap"><span class="badge #{p.eligibilityCheck eq 'PASSED' ? 'good' : (p.eligibilityCheck eq 'FAILED' ? 'danger' : (p.eligibilityCheck eq 'OVERRIDDEN' ? 'warn' : ''))}">#{fmt.label(p.eligibilityCheck)}</span>
+                                    <span class="sub">#{p.eligibilityNotes}</span>
+                                    <ui:fragment rendered="#{not empty p.overrideReason}"><span class="sub">Overridden by #{p.overriddenBy}: #{p.overrideReason}</span></ui:fragment></td>
+                                <td><span class="sub">Initiated: #{p.initiatedBy}</span>
+                                    <ui:fragment rendered="#{p.confirmedBy ne null}"><span class="sub">Confirmed: #{p.confirmedBy}</span></ui:fragment>
+                                    <ui:fragment rendered="#{p.approvedBy ne null}"><span class="sub">Approved: #{p.approvedBy}</span></ui:fragment>
+                                    <ui:fragment rendered="#{p.paidAt ne null}"><span class="sub">Paid #{fmt.dateTime(p.paidAt)}</span></ui:fragment></td>
+                                <td>
+                                    <ui:fragment rendered="#{p.status eq 'SCHEDULED' or p.status eq 'PENDING_APPROVAL' or p.status eq 'CONFIRMED'}">
+                                        <h:inputText value="#{groupBean.notes[p.id]}" pt:placeholder="Override/cancel reason" pt:aria-label="Reason"
+                                                     rendered="#{groupBean.treasurer or groupBean.committee}"/>
+                                    </ui:fragment>
+                                </td>
+                                <td class="actions">
+                                    <h:commandButton rendered="#{groupBean.treasurer and p.status eq 'SCHEDULED' and (p.eligibilityCheck eq 'PASSED' or p.eligibilityCheck eq 'OVERRIDDEN')}"
+                                                     value="Confirm" action="#{groupBean.confirm(p.id)}" styleClass="btn small primary"/>
+                                    <h:commandButton rendered="#{groupBean.canOverride(p)}" value="Override" action="#{groupBean.override(p.id)}" styleClass="btn small"/>
+                                    <h:commandButton rendered="#{groupBean.canApprove(p)}" value="Approve" action="#{groupBean.approve(p.id)}" styleClass="btn small primary"/>
+                                    <h:commandButton rendered="#{groupBean.treasurer and p.status eq 'CONFIRMED'}" value="Mark paid" action="#{groupBean.pay(p.id)}" styleClass="btn small primary"
+                                                     pt:onclick="return confirm('Mark this payout as paid? The money leaves the group balance.')"/>
+                                    <h:commandButton rendered="#{(groupBean.treasurer or groupBean.committee) and (p.status eq 'SCHEDULED' or p.status eq 'PENDING_APPROVAL' or p.status eq 'CONFIRMED')}"
+                                                     value="Cancel" action="#{groupBean.cancel(p.id)}" styleClass="btn small danger"/>
+                                </td>
+                            </tr>
+                        </ui:repeat>
+                        </tbody>
+                    </table>
+                    </h:form>
+                    <h:panelGroup rendered="#{empty groupBean.payoutList}"><p class="empty">No payouts yet.</p></h:panelGroup>
+                </div>
+            </section>
+            </div>
+        </ui:fragment>
+
+        <!-- =============================== MEMBERS =============================== -->
+        <ui:fragment rendered="#{groupBean.tab eq 'members'}">
+            <div class="stack">
+            <section>
+                <div class="table-wrap">
+                    <h:form>
+                    <table class="data">
+                        <thead><tr><th class="num">Payout order</th><th>Member</th><th>Role</th><th>Joined</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                        <ui:repeat value="#{groupBean.memberList}" var="m">
+                            <tr style="#{m.status eq 'ACTIVE' ? '' : 'opacity:.6'}">
+                                <td class="num">
+                                    <ui:fragment rendered="#{m.status eq 'ACTIVE' and (groupBean.treasurer or groupBean.committee or groupBean.admin)}">
+                                        <div class="row" style="justify-content:flex-end;flex-wrap:nowrap">
+                                            <h:inputText value="#{groupBean.positionEdits[m.memberId]}" pt:type="number" pt:min="1" style="width:74px" pt:aria-label="Position"/>
+                                            <h:commandButton value="Move" action="#{groupBean.savePosition(m.memberId)}" styleClass="btn small"/>
+                                        </div>
+                                    </ui:fragment>
+                                    <ui:fragment rendered="#{not (m.status eq 'ACTIVE' and (groupBean.treasurer or groupBean.committee or groupBean.admin))}">#{m.status eq 'ACTIVE' ? m.payoutPosition : '-'}</ui:fragment>
+                                </td>
+                                <td>#{m.memberName}<span class="sub">#{m.phoneNumber}</span></td>
+                                <td>
+                                    <ui:fragment rendered="#{m.status eq 'ACTIVE' and (groupBean.committee or groupBean.admin)}">
+                                        <div class="row" style="flex-wrap:nowrap">
+                                            <h:selectOneMenu value="#{groupBean.roleEdits[m.memberId]}" style="width:150px">
+                                                <f:selectItems value="#{groupBean.roles}" var="r" itemLabel="#{fmt.label(r)}" itemValue="#{r.name()}"/>
+                                            </h:selectOneMenu>
+                                            <h:commandButton value="Set" action="#{groupBean.saveRole(m.memberId)}" styleClass="btn small"/>
+                                        </div>
+                                    </ui:fragment>
+                                    <ui:fragment rendered="#{not (m.status eq 'ACTIVE' and (groupBean.committee or groupBean.admin))}">#{fmt.label(m.role)}</ui:fragment>
+                                </td>
+                                <td>#{fmt.date(m.joinedDate)}</td>
+                                <td><span class="badge #{m.status eq 'ACTIVE' ? 'good' : ''}">#{fmt.label(m.status)}</span>
+                                    <ui:fragment rendered="#{m.leftDate ne null}"><span class="sub">left #{fmt.date(m.leftDate)}</span></ui:fragment></td>
+                                <td class="actions">
+                                    <h:commandButton rendered="#{m.status eq 'ACTIVE' and groupBean.officer and m.role ne 'TREASURER'}" value="Remove"
+                                                     action="#{groupBean.removeMember(m.memberId)}" styleClass="btn small danger"
+                                                     pt:onclick="return confirm('Remove this member from the group? Their history is kept.')"/>
+                                </td>
+                            </tr>
+                        </ui:repeat>
+                        </tbody>
+                    </table>
+                    </h:form>
+                    <h:panelGroup rendered="#{empty groupBean.memberList}"><p class="empty">No members yet.</p></h:panelGroup>
+                </div>
+            </section>
+
+            <ui:fragment rendered="#{groupBean.officer and g.status ne 'CLOSED'}">
+                <div class="grid-2">
+                    <section class="card">
+                        <h2>Add a registered person</h2>
+                        <p class="muted">Look them up by their exact phone number or ID number.</p>
+                        <h:form styleClass="form">
+                            <div class="row" style="flex-wrap:nowrap">
+                                <h:inputText value="#{groupBean.lookup}" pt:type="search" pt:placeholder="082 123 4567" pt:aria-label="Phone or ID number"/>
+                                <h:commandButton value="Find" action="#{groupBean.lookupMember}" styleClass="btn"/>
+                            </div>
+                            <ui:fragment rendered="#{groupBean.found ne null}">
+                                <div class="callout good" style="margin:0"><strong>#{groupBean.found.fullName}</strong> · #{groupBean.found.phoneNumber}</div>
+                                <div class="field"><h:outputLabel for="arole" value="Role"/>
+                                    <h:selectOneMenu id="arole" value="#{groupBean.addRole}">
+                                        <f:selectItems value="#{groupBean.roles}" var="r" itemLabel="#{fmt.label(r)}" itemValue="#{r}"/>
+                                    </h:selectOneMenu></div>
+                                <div class="field"><h:outputLabel for="ajoined" value="Joined on"/>
+                                    <h:inputText id="ajoined" value="#{groupBean.addJoined}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText>
+                                    <div class="hint">Contributions are expected from this date.</div></div>
+                                <h:commandButton value="Add to group" action="#{groupBean.addMember}" styleClass="btn primary"/>
+                            </ui:fragment>
+                        </h:form>
+                    </section>
+
+                    <section class="card">
+                        <h2>Register someone new</h2>
+                        <h:form styleClass="form">
+                            <div class="field"><h:outputLabel for="rname" value="Full name"/><h:inputText id="rname" value="#{groupBean.regName}"/></div>
+                            <div class="field"><h:outputLabel for="rid" value="SA ID number"/><h:inputText id="rid" value="#{groupBean.regNationalId}" pt:inputmode="numeric" pt:maxlength="13"/>
+                                <div class="hint">Stored encrypted; only the last 4 digits are ever shown.</div></div>
+                            <div class="field"><h:outputLabel for="rphone" value="Mobile number"/><h:inputText id="rphone" value="#{groupBean.regPhone}" pt:type="tel"/></div>
+                            <div class="field"><h:outputLabel for="remail" value="Email (optional, used if SMS fails)"/><h:inputText id="remail" value="#{groupBean.regEmail}" pt:type="email"/></div>
+                            <div class="field"><h:outputLabel for="rch" value="Send messages by"/>
+                                <h:selectOneMenu id="rch" value="#{groupBean.regChannel}">
+                                    <f:selectItems value="#{groupBean.channels}" var="c" itemLabel="#{fmt.label(c)}" itemValue="#{c}"/>
+                                </h:selectOneMenu></div>
+                            <div class="field"><h:outputLabel for="rrole" value="Role in this group"/>
+                                <h:selectOneMenu id="rrole" value="#{groupBean.addRole}">
+                                    <f:selectItems value="#{groupBean.roles}" var="r" itemLabel="#{fmt.label(r)}" itemValue="#{r}"/>
+                                </h:selectOneMenu></div>
+                            <label class="check"><h:selectBooleanCheckbox value="#{groupBean.regConsent}"/>
+                                <span>The person has consented to StokVault processing their personal information (POPIA).</span></label>
+                            <h:commandButton value="Register and add" action="#{groupBean.registerAndAdd}" styleClass="btn primary"/>
+                        </h:form>
+                    </section>
+                </div>
+            </ui:fragment>
+            </div>
+        </ui:fragment>
+
+        <!-- =========================== AUDIT & REPORTS =========================== -->
+        <ui:fragment rendered="#{groupBean.tab eq 'audit' and groupBean.officer}">
+            <div class="stack">
+            <h:panelGroup layout="block" styleClass="callout #{groupBean.chain.valid ? 'good' : 'danger'}" rendered="#{groupBean.chain ne null}">
+                <strong>#{groupBean.chain.valid ? 'Audit trail intact.' : 'AUDIT TRAIL TAMPERED WITH.'}</strong>
+                #{groupBean.chain.message}. Each entry's SHA-256 hash covers the entry before it, so changing
+                or deleting any past entry breaks every hash after it.
+            </h:panelGroup>
+
+            <section class="card">
+                <h2>Reports</h2>
+                <div class="row">
+                    <a class="btn" href="#{api}/reports/statement?format=pdf">Group statement (PDF)</a>
+                    <a class="btn" href="#{api}/reports/statement?format=csv">Group statement (CSV)</a>
+                    <a class="btn" href="#{api}/reports/audit?format=pdf">Audit trail (PDF)</a>
+                    <a class="btn" href="#{api}/reports/audit?format=csv">Audit trail (CSV)</a>
+                </div>
+            </section>
+
+            <section>
+                <h2>Audit trail (newest first)</h2>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th class="num">#</th><th>When</th><th>Action</th><th>By</th><th>Details</th><th>Hash</th></tr></thead>
+                        <tbody>
+                        <ui:repeat value="#{groupBean.auditList}" var="a">
+                            <tr>
+                                <td class="num">#{a.sequence}</td>
+                                <td>#{fmt.dateTime(a.loggedAt)}</td>
+                                <td>#{fmt.label(a.action)}</td>
+                                <td>#{a.performedBy}</td>
+                                <td><div class="details">#{a.details}</div></td>
+                                <td><span class="hash" title="#{a.entryHash}">#{fmt.shortHash(a.entryHash)}</span></td>
+                            </tr>
+                        </ui:repeat>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            </div>
+        </ui:fragment>
+
+        <!-- =============================== SETTINGS =============================== -->
+        <ui:fragment rendered="#{groupBean.tab eq 'settings' and groupBean.officer}">
+            <div class="grid-2">
+                <section class="card">
+                    <h2>Group settings</h2>
+                    <h:form styleClass="form" rendered="#{groupBean.treasurer or groupBean.admin}">
+                        <div class="field"><h:outputLabel for="sname" value="Name"/><h:inputText id="sname" value="#{groupBean.setName}"/></div>
+                        <div class="field"><h:outputLabel for="sdesc" value="Description"/><h:inputTextarea id="sdesc" value="#{groupBean.setDescription}" rows="2"/></div>
+                        <div class="field"><h:outputLabel for="stype" value="Type"/>
+                            <h:selectOneMenu id="stype" value="#{groupBean.setType}" disabled="#{g.status ne 'DRAFT'}">
+                                <f:selectItems value="#{groupBean.types}" var="t" itemLabel="#{fmt.label(t)}" itemValue="#{t}"/>
+                            </h:selectOneMenu>
+                            <div class="hint">Fixed once the group is active.</div></div>
+                        <div class="field"><h:outputLabel for="samt" value="Contribution per cycle (R)"/>
+                            <h:inputText id="samt" value="#{groupBean.setAmount}" pt:type="number" pt:step="0.01"/>
+                            <div class="hint">Applies to cycles opened from now on.</div></div>
+                        <div class="field"><h:outputLabel for="sfreq" value="Frequency"/>
+                            <h:selectOneMenu id="sfreq" value="#{groupBean.setFrequency}">
+                                <f:selectItems value="#{groupBean.frequencies}" var="f" itemLabel="#{fmt.label(f)}" itemValue="#{f}"/>
+                            </h:selectOneMenu></div>
+                        <div class="field"><h:outputLabel for="sstart" value="First due date"/>
+                            <h:inputText id="sstart" value="#{groupBean.setStart}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                        <div class="field"><h:outputLabel for="sthr" value="Approval threshold (R)"/>
+                            <h:inputText id="sthr" value="#{groupBean.setApprovalThreshold}" pt:type="number" pt:step="0.01"/>
+                            <div class="hint">Payouts above this need a committee member's approval (four-eyes).</div></div>
+                        <div class="field"><h:outputLabel for="scomp" value="Required cycle completion (%)"/>
+                            <h:inputText id="scomp" value="#{groupBean.setCompletion}" pt:type="number" pt:min="1" pt:max="100"/>
+                            <div class="hint">The eligibility check blocks payouts until this share of members has paid.</div></div>
+                        <div class="field"><h:outputLabel for="sben" value="Burial benefit (R)"/>
+                            <h:inputText id="sben" value="#{groupBean.setBenefit}" pt:type="number" pt:step="0.01"/></div>
+                        <h:commandButton value="Save settings" action="#{groupBean.saveSettings}" styleClass="btn primary"/>
+                    </h:form>
+                    <ui:fragment rendered="#{not (groupBean.treasurer or groupBean.admin)}"><p class="muted">Only the treasurer or the Coop Office can change the settings.</p></ui:fragment>
+                </section>
+
+                <section class="card">
+                    <h2>Group status</h2>
+                    <p>This group is <strong>#{fmt.label(g.status).toLowerCase()}</strong>.</p>
+                    <h:form styleClass="form">
+                        <div class="field"><h:outputLabel for="sreason" value="Reason (recorded in the audit trail)"/>
+                            <h:inputText id="sreason" value="#{groupBean.statusReason}"/></div>
+                        <div class="row">
+                            <h:commandButton rendered="#{g.status eq 'DRAFT' and (groupBean.treasurer or groupBean.admin)}" value="Activate" action="#{groupBean.activate}" styleClass="btn primary"/>
+                            <h:commandButton rendered="#{g.status eq 'ACTIVE' and (groupBean.committee or groupBean.admin)}" value="Suspend" action="#{groupBean.suspend}" styleClass="btn danger"/>
+                            <h:commandButton rendered="#{g.status eq 'SUSPENDED' and groupBean.admin}" value="Resume" action="#{groupBean.resume}" styleClass="btn primary"/>
+                            <h:commandButton rendered="#{g.status ne 'CLOSED' and groupBean.admin}" value="Close group" action="#{groupBean.closeGroup}" styleClass="btn danger"
+                                             pt:onclick="return confirm('Close this group permanently?')"/>
+                        </div>
+                    </h:form>
+                </section>
+            </div>
+        </ui:fragment>
+    </ui:fragment>
+    </ui:define>
+</ui:composition>

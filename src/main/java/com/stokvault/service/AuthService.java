@@ -17,6 +17,8 @@ import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.Stateless;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
@@ -112,7 +114,7 @@ public class AuthService {
     }
 
     @RolesAllowed(Roles.MEMBER)
-    public void changePassword(AuthRequests.PasswordChange change) {
+    public void changePassword(@Valid @NotNull AuthRequests.PasswordChange change) {
         Member member = access.currentMember();
         if (member.isPasswordSet()
                 && (change.currentPassword() == null || !hasher.matches(change.currentPassword(), member.getPasswordHash()))) {

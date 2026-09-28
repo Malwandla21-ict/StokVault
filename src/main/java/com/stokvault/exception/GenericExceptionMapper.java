@@ -1,6 +1,5 @@
 package com.stokvault.exception;
 
-import jakarta.ejb.EJBAccessException;
 import jakarta.json.bind.JsonbException;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.ws.rs.ProcessingException;
@@ -37,7 +36,7 @@ public class GenericExceptionMapper implements ExceptionMapper<Exception> {
         if (error instanceof AccessDeniedException) {
             return ErrorResponse.of(Response.Status.FORBIDDEN, error.getMessage());
         }
-        if (error instanceof EJBAccessException) {
+        if (Errors.isPermissionDenied(error)) {
             // @RolesAllowed on an EJB method refused the caller
             return ErrorResponse.of(Response.Status.FORBIDDEN, "You don't have permission to do that");
         }
