@@ -1,0 +1,61 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!-- Manage group → Settings: the stokvel's rules, and pausing or closing it -->
+    <p class="section-intro">The rules this stokvel runs by. Changes are written into the records.</p>
+
+    <div class="row">
+        <section class="card pad grow-2">
+            <h2>Rules</h2>
+            <h:form styleClass="form grid" rendered="#{groupBean.treasurer or groupBean.admin}">
+                <div class="field"><h:outputLabel for="sname" value="Name"/><h:inputText id="sname" value="#{groupBean.setName}"/></div>
+                <div class="field"><h:outputLabel for="stype" value="Kind of stokvel"/>
+                    <h:selectOneMenu id="stype" value="#{groupBean.setType}" disabled="#{g.status ne 'DRAFT'}">
+                        <f:selectItems value="#{groupBean.types}" var="t" itemLabel="#{fmt.groupType(t)}" itemValue="#{t}"/>
+                    </h:selectOneMenu></div>
+                <div class="field"><h:outputLabel for="samt" value="Each member pays (R)"/>
+                    <h:inputText id="samt" value="#{groupBean.setAmount}" pt:type="number" pt:step="0.01"/></div>
+                <div class="field"><h:outputLabel for="sfreq" value="How often"/>
+                    <h:selectOneMenu id="sfreq" value="#{groupBean.setFrequency}">
+                        <f:selectItems value="#{groupBean.frequencies}" var="fq" itemLabel="#{fmt.label(fq)}" itemValue="#{fq}"/>
+                    </h:selectOneMenu></div>
+                <div class="field"><h:outputLabel for="sstart" value="First payment due"/>
+                    <h:inputText id="sstart" value="#{groupBean.setStart}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                <div class="field"><h:outputLabel for="sthr" value="Payouts over this need a committee OK (R)"/>
+                    <h:inputText id="sthr" value="#{groupBean.setApprovalThreshold}" pt:type="number" pt:step="0.01"/></div>
+                <div class="field"><h:outputLabel for="scomp" value="Share of members who must have paid before a payout (%)"/>
+                    <h:inputText id="scomp" value="#{groupBean.setCompletion}" pt:type="number" pt:min="1" pt:max="100"/></div>
+                <div class="field"><h:outputLabel for="sben" value="Funeral benefit (R, burial societies)"/>
+                    <h:inputText id="sben" value="#{groupBean.setBenefit}" pt:type="number" pt:step="0.01"/></div>
+                <div class="field" style="grid-column:1/-1"><h:outputLabel for="sdesc" value="Description"/><h:inputTextarea id="sdesc" value="#{groupBean.setDescription}" rows="2"/></div>
+                <h:commandButton value="Save" action="#{groupBean.saveSettings}" styleClass="btn primary"/>
+            </h:form>
+            <ui:fragment rendered="#{not (groupBean.treasurer or groupBean.admin)}">
+                <p class="muted">Only the treasurer or the Coop Office can change these.</p>
+                <dl class="facts">
+                    <dt>Each member pays</dt><dd><span class="amt">#{fmt.rand(g.contributionAmount)}</span> #{fmt.label(g.frequency).toLowerCase()}</dd>
+                    <dt>Committee OK needed over</dt><dd class="amt">#{fmt.rand(g.approvalThreshold)}</dd>
+                    <dt>Must have paid before a payout</dt><dd>#{g.completionThreshold}% of members</dd>
+                </dl>
+            </ui:fragment>
+        </section>
+
+        <section class="card pad grow-1">
+            <h2>Pause or close</h2>
+            <p>This stokvel is <span class="pill #{fmt.tone(g.status)}">#{fmt.groupState(g.status)}</span></p>
+            <h:form styleClass="form">
+                <div class="field"><h:outputLabel for="sreason" value="Reason (kept in the records)"/>
+                    <h:inputText id="sreason" value="#{groupBean.statusReason}"/></div>
+                <div class="inline">
+                    <h:commandButton rendered="#{g.status eq 'DRAFT' and (groupBean.treasurer or groupBean.admin)}" value="Activate" action="#{groupBean.activate}" styleClass="btn primary"/>
+                    <h:commandButton rendered="#{g.status eq 'ACTIVE' and (groupBean.committee or groupBean.admin)}" value="Pause the stokvel" action="#{groupBean.suspend}" styleClass="btn danger"/>
+                    <h:commandButton rendered="#{g.status eq 'SUSPENDED' and groupBean.admin}" value="Resume" action="#{groupBean.resume}" styleClass="btn primary"/>
+                    <h:commandButton rendered="#{g.status ne 'CLOSED' and groupBean.admin}" value="Close for good" action="#{groupBean.closeGroup}" styleClass="btn danger"
+                                     pt:onclick="return confirm('Close this stokvel permanently?')"/>
+                </div>
+            </h:form>
+        </section>
+    </div>
+</ui:composition>

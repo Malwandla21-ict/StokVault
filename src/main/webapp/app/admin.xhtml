@@ -4,102 +4,121 @@
                 xmlns:ui="jakarta.faces.facelets"
                 xmlns:pt="jakarta.faces.passthrough"
                 template="/WEB-INF/templates/layout.xhtml">
-    <!-- Coop Office (UMP) administration: platform-wide reports, onboarding groups and people -->
+    <!--
+        Coop Office (UMP) administration. Most common jobs first (registering stokvels and people),
+        then the overview of every stokvel, the people list, and the message log last.
+    -->
     <ui:param name="nav" value="admin"/>
     <ui:define name="title">Coop Office</ui:define>
     <ui:define name="heading">Coop Office</ui:define>
-    <ui:define name="subtitle">Every stokvel on the platform, onboarding and background jobs</ui:define>
-    <ui:define name="actions">
-        <h:form styleClass="inline" rendered="#{user.admin}">
-            <h:commandButton value="Run eligibility check" action="#{adminBean.runEligibility}" styleClass="btn"/>
-            <h:commandButton value="Send due reminders" action="#{adminBean.sendReminders}" styleClass="btn"/>
-        </h:form>
-    </ui:define>
+    <ui:define name="subtitle">Register stokvels and people, and keep an eye on every stokvel</ui:define>
 
     <ui:define name="content">
     <ui:fragment rendered="#{not user.admin}"><div class="callout bad">This page is for the Coop Office only.</div></ui:fragment>
     <ui:fragment rendered="#{user.admin}">
         <div class="stats-row">
             <div class="stat"><span class="kicker">Stokvels</span><span class="value">#{adminBean.report.groups}</span></div>
-            <div class="stat"><span class="kicker">Memberships</span><span class="value">#{adminBean.report.activeMembers}</span></div>
+            <div class="stat"><span class="kicker">People in stokvels</span><span class="value">#{adminBean.report.activeMembers}</span></div>
             <div class="stat"><span class="kicker">Money held</span><span class="value amt">#{fmt.rand(adminBean.report.totalBalance)}</span></div>
-            <div class="stat #{fmt.positive(adminBean.report.totalArrears) ? 'warn' : ''}"><span class="kicker">Arrears</span><span class="value amt">#{fmt.rand(adminBean.report.totalArrears)}</span></div>
-            <div class="stat"><span class="kicker">To verify</span><span class="value">#{adminBean.report.awaitingVerification}</span></div>
-            <div class="stat"><span class="kicker">To approve</span><span class="value">#{adminBean.report.payoutsAwaitingApproval}</span></div>
+            <div class="stat #{fmt.positive(adminBean.report.totalArrears) ? 'warn' : ''}"><span class="kicker">Owed by members</span><span class="value amt">#{fmt.rand(adminBean.report.totalArrears)}</span></div>
+            <div class="stat"><span class="kicker">Payments to check</span><span class="value">#{adminBean.report.awaitingVerification}</span></div>
+            <div class="stat"><span class="kicker">Payouts to approve</span><span class="value">#{adminBean.report.payoutsAwaitingApproval}</span></div>
         </div>
 
-        <section class="card flush">
-            <div class="card-head"><h2>Stokvels</h2><span class="muted">Audit chains are re-verified every time this page loads</span></div>
-            <div class="scroll-x"><div class="min">
-                <div class="list-row list-head" style="grid-template-columns:minmax(0,2fr) 100px 60px repeat(3,minmax(0,1fr)) 70px 90px">
-                    <span>Name</span><span>Status</span><span class="num">Members</span><span class="num">Balance</span><span class="num">Paid out</span><span class="num">Arrears</span><span class="num">To verify</span><span class="num">Audit</span></div>
-                <ui:repeat value="#{adminBean.report.rows}" var="r">
-                    <div class="list-row" style="grid-template-columns:minmax(0,2fr) 100px 60px repeat(3,minmax(0,1fr)) 70px 90px">
-                        <div><a class="strong" href="group.xhtml?id=#{r.groupId}">#{r.name}</a><div class="muted" style="font-size:12px">#{fmt.label(r.type)}</div></div>
-                        <span><span class="pill #{fmt.tone(r.status)}">#{fmt.label(r.status)}</span></span>
-                        <span class="num">#{r.activeMembers}</span>
-                        <span class="num strong amt">#{fmt.rand(r.balance)}</span>
-                        <span class="num amt">#{fmt.rand(r.totalPaidOut)}</span>
-                        <span class="num amt">#{fmt.rand(r.arrears)}</span>
-                        <span class="num">#{r.awaitingVerification}</span>
-                        <div class="end"><span class="pill #{r.auditChainValid ? 'good' : 'bad'}">#{r.auditChainValid ? 'Intact' : 'BROKEN'}</span></div>
-                    </div>
-                </ui:repeat>
-                <ui:fragment rendered="#{empty adminBean.report.rows}"><div class="empty">No stokvels yet.</div></ui:fragment>
-            </div></div>
-        </section>
-
+        <!-- 1 and 2: the everyday jobs -->
         <div class="row">
-            <section class="card pad grow-1">
-                <h2>Register a stokvel</h2>
-                <p class="muted">It starts as a draft: add members and a treasurer, then activate it.</p>
+            <section class="card pad grow-1" id="new-stokvel">
+                <div>
+                    <h2>Register a stokvel</h2>
+                    <p class="muted">Start a new stokvel. It begins as a draft: you then add its people, choose a treasurer and activate it.</p>
+                </div>
                 <h:form styleClass="form grid">
                     <div class="field" style="grid-column:1/-1"><h:outputLabel for="gname" value="Name"/><h:inputText id="gname" value="#{adminBean.name}"/></div>
-                    <div class="field"><h:outputLabel for="gtype" value="Type"/>
+                    <div class="field" style="grid-column:1/-1"><h:outputLabel for="gtype" value="Kind of stokvel"/>
                         <h:selectOneMenu id="gtype" value="#{adminBean.type}">
-                            <f:selectItems value="#{adminBean.types}" var="t" itemLabel="#{fmt.label(t)}" itemValue="#{t}"/>
+                            <f:selectItems value="#{adminBean.types}" var="t" itemLabel="#{fmt.groupType(t)}" itemValue="#{t}"/>
                         </h:selectOneMenu></div>
-                    <div class="field"><h:outputLabel for="gfreq" value="Frequency"/>
+                    <div class="field"><h:outputLabel for="gamt" value="Each member pays (R)"/>
+                        <h:inputText id="gamt" value="#{adminBean.contributionAmount}" pt:type="number" pt:step="0.01"/></div>
+                    <div class="field"><h:outputLabel for="gfreq" value="How often"/>
                         <h:selectOneMenu id="gfreq" value="#{adminBean.frequency}">
                             <f:selectItems value="#{adminBean.frequencies}" var="fq" itemLabel="#{fmt.label(fq)}" itemValue="#{fq}"/>
                         </h:selectOneMenu></div>
-                    <div class="field"><h:outputLabel for="gamt" value="Contribution (R)"/>
-                        <h:inputText id="gamt" value="#{adminBean.contributionAmount}" pt:type="number" pt:step="0.01"/></div>
-                    <div class="field"><h:outputLabel for="gstart" value="First due date"/>
+                    <div class="field"><h:outputLabel for="gstart" value="First payment due"/>
                         <h:inputText id="gstart" value="#{adminBean.startDate}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
-                    <div class="field"><h:outputLabel for="gthr" value="Approval threshold (R)"/>
-                        <h:inputText id="gthr" value="#{adminBean.approvalThreshold}" pt:type="number" pt:step="0.01"/></div>
-                    <div class="field"><h:outputLabel for="gcomp" value="Required completion (%)"/>
-                        <h:inputText id="gcomp" value="#{adminBean.completionThreshold}" pt:type="number" pt:min="1" pt:max="100"/></div>
-                    <div class="field"><h:outputLabel for="gben" value="Burial benefit (R)"/>
+                    <div class="field"><h:outputLabel for="gben" value="Funeral benefit (R, burial societies)"/>
                         <h:inputText id="gben" value="#{adminBean.benefitAmount}" pt:type="number" pt:step="0.01"/></div>
-                    <div class="field" style="grid-column:1/-1"><h:outputLabel for="gdesc" value="Description"/><h:inputText id="gdesc" value="#{adminBean.description}"/></div>
-                    <h:commandButton value="Create as draft" action="#{adminBean.createGroup}" styleClass="btn primary"/>
+                    <details class="more-rules" style="grid-column:1/-1">
+                        <summary>More rules (the usual values are filled in)</summary>
+                        <div class="form grid">
+                            <div class="field"><h:outputLabel for="gthr" value="Payouts over this need a committee OK (R)"/>
+                                <h:inputText id="gthr" value="#{adminBean.approvalThreshold}" pt:type="number" pt:step="0.01"/></div>
+                            <div class="field"><h:outputLabel for="gcomp" value="Share of members who must have paid before a payout (%)"/>
+                                <h:inputText id="gcomp" value="#{adminBean.completionThreshold}" pt:type="number" pt:min="1" pt:max="100"/></div>
+                            <div class="field" style="grid-column:1/-1"><h:outputLabel for="gdesc" value="Description"/><h:inputText id="gdesc" value="#{adminBean.description}"/></div>
+                        </div>
+                    </details>
+                    <h:commandButton value="Create the stokvel" action="#{adminBean.createGroup}" styleClass="btn primary"/>
                 </h:form>
             </section>
 
-            <section class="card pad grow-1">
-                <h2>Register a person</h2>
-                <p class="muted">They sign in the first time with an SMS code, then choose a password.</p>
+            <section class="card pad grow-1" id="new-person">
+                <div>
+                    <h2>Register a person</h2>
+                    <p class="muted">Add someone to StokVault. They log in the first time with an SMS code, then choose a password.</p>
+                </div>
                 <h:form styleClass="form">
                     <div class="field"><h:outputLabel for="pname" value="Full name"/><h:inputText id="pname" value="#{adminBean.regName}"/></div>
-                    <div class="field"><h:outputLabel for="pid" value="SA ID number"/><h:inputText id="pid" value="#{adminBean.regNationalId}" pt:inputmode="numeric" pt:maxlength="13"/></div>
+                    <div class="field"><h:outputLabel for="pid" value="SA ID number"/><h:inputText id="pid" value="#{adminBean.regNationalId}" pt:inputmode="numeric" pt:maxlength="13"/>
+                        <span class="hint">Kept locked away; only the last 4 digits are ever shown.</span></div>
                     <div class="field"><h:outputLabel for="pphone" value="Mobile number"/><h:inputText id="pphone" value="#{adminBean.regPhone}" pt:type="tel"/></div>
-                    <div class="field"><h:outputLabel for="pemail" value="Email (optional)"/><h:inputText id="pemail" value="#{adminBean.regEmail}" pt:type="email"/></div>
+                    <div class="field"><h:outputLabel for="pemail" value="Email (optional, used if SMS fails)"/><h:inputText id="pemail" value="#{adminBean.regEmail}" pt:type="email"/></div>
                     <div class="field"><span class="label">Send messages by</span>
                         <h:selectOneRadio value="#{adminBean.regChannel}" layout="lineDirection" styleClass="seg-radio">
                             <f:selectItems value="#{adminBean.channels}" var="ch" itemLabel="#{fmt.label(ch)}" itemValue="#{ch}"/>
                         </h:selectOneRadio></div>
                     <label class="check"><h:selectBooleanCheckbox value="#{adminBean.regConsent}"/>
-                        <span>They consented to StokVault processing their personal information (POPIA).</span></label>
+                        <span>They agreed that StokVault may keep their personal information (POPIA).</span></label>
                     <h:commandButton value="Register" action="#{adminBean.register}" styleClass="btn primary"/>
                 </h:form>
             </section>
         </div>
 
-        <section class="card flush">
+        <!-- 3: every stokvel -->
+        <section class="card flush" id="stokvels">
             <div class="card-head">
-                <h2>People</h2>
+                <div>
+                    <h2>Stokvels</h2>
+                    <p class="muted">Every stokvel on StokVault. Each one's records are checked for tampering every time you open this page.</p>
+                </div>
+            </div>
+            <div class="scroll-x"><div class="min">
+                <div class="list-row list-head cols-admin-groups">
+                    <span>Name</span><span>Status</span><span class="num">Members</span><span class="num">Money held</span><span class="num">Paid out</span><span class="num">Owed</span><span class="num">To check</span><span class="num">Records</span></div>
+                <ui:repeat value="#{adminBean.report.rows}" var="r">
+                    <div class="list-row cols-admin-groups">
+                        <div><a class="strong" href="group.xhtml?id=#{r.groupId}">#{r.name}</a><div class="muted small">#{fmt.label(r.type)}</div></div>
+                        <span><span class="pill #{fmt.tone(r.status)}">#{fmt.groupState(r.status)}</span></span>
+                        <span class="num">#{r.activeMembers}</span>
+                        <span class="num strong amt">#{fmt.rand(r.balance)}</span>
+                        <span class="num amt">#{fmt.rand(r.totalPaidOut)}</span>
+                        <span class="num amt">#{fmt.rand(r.arrears)}</span>
+                        <span class="num">#{r.awaitingVerification}</span>
+                        <div class="end"><span class="pill #{r.auditChainValid ? 'good' : 'bad'}">#{r.auditChainValid ? 'Safe ✓' : 'Changed!'}</span></div>
+                    </div>
+                </ui:repeat>
+                <ui:fragment rendered="#{empty adminBean.report.rows}"><div class="empty">No stokvels yet. Register one above.</div></ui:fragment>
+            </div></div>
+            <p class="muted small" style="padding:0 24px 16px">"Changed!" means someone edited an old record directly in the database. Open the stokvel's Manage group → Records to see where.</p>
+        </section>
+
+        <!-- 4: people -->
+        <section class="card flush" id="people">
+            <div class="card-head">
+                <div>
+                    <h2>People</h2>
+                    <p class="muted">Everyone registered on StokVault. "Invited" means they haven't logged in and chosen a password yet.</p>
+                </div>
                 <h:form styleClass="inline">
                     <h:inputText value="#{adminBean.peopleSearch}" pt:type="search" pt:placeholder="Name or mobile number" style="width:240px"/>
                     <h:commandButton value="Search" action="#{adminBean.filter}" styleClass="btn sm"/>
@@ -114,7 +133,7 @@
                         <span class="muted">#{m.email}</span>
                         <span class="hash">ID #{m.nationalIdMasked}</span>
                         <div class="end">
-                            <ui:fragment rendered="#{m.admin}"><span class="pill info">Admin</span></ui:fragment>
+                            <ui:fragment rendered="#{m.admin}"><span class="pill info">Coop Office</span></ui:fragment>
                             <ui:fragment rendered="#{not m.admin}"><span class="pill #{m.passwordSet ? 'good' : 'warn'}">#{m.passwordSet ? 'Active' : 'Invited'}</span></ui:fragment>
                         </div>
                     </div>
@@ -122,28 +141,40 @@
             </div></div>
         </section>
 
-        <section class="card flush">
+        <!-- 5: messages, and running the nightly jobs now -->
+        <section class="card flush" id="messages">
             <div class="card-head">
-                <h2>Notification log</h2>
+                <div>
+                    <h2>Messages sent</h2>
+                    <p class="muted">Every SMS, WhatsApp and email StokVault sent. "Couldn't send" means it failed 3 times; follow up with that person.</p>
+                </div>
                 <h:form styleClass="inline">
                     <h:selectOneMenu value="#{adminBean.notificationFilter}" style="width:180px">
                         <f:selectItem itemLabel="All messages" itemValue="#{null}"/>
-                        <f:selectItems value="#{adminBean.notificationStatuses}" var="s" itemLabel="#{fmt.label(s)}" itemValue="#{s}"/>
+                        <f:selectItems value="#{adminBean.notificationStatuses}" var="s" itemLabel="#{fmt.message(s)}" itemValue="#{s}"/>
                     </h:selectOneMenu>
-                    <h:commandButton value="Filter" action="#{adminBean.filter}" styleClass="btn sm"/>
+                    <h:commandButton value="Show" action="#{adminBean.filter}" styleClass="btn sm"/>
                 </h:form>
             </div>
-            <p class="muted" style="padding:0 24px 12px">Failed messages went to the dead-letter queue after 3 attempts and need follow-up.</p>
             <div class="scroll-x"><div class="min">
                 <ui:repeat value="#{adminBean.notifications}" var="n">
-                    <div class="list-row" style="grid-template-columns:110px minmax(0,1.2fr) minmax(0,3fr) 120px">
+                    <div class="list-row" style="grid-template-columns:110px minmax(0,1.2fr) minmax(0,3fr) 130px">
                         <span class="muted">#{fmt.dateTime(n.createdAt)}</span>
-                        <div><div class="strong">#{n.memberName}</div><div class="muted" style="font-size:12px">#{fmt.label(n.type)} · #{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</div></div>
-                        <div><div>#{n.body}</div><ui:fragment rendered="#{not empty n.lastError}"><div class="muted" style="font-size:12px">#{n.lastError}</div></ui:fragment></div>
-                        <div class="end"><span class="pill #{fmt.tone(n.status)}">#{fmt.label(n.status)}#{n.attempts gt 1 ? ' · ' += n.attempts += ' tries' : ''}</span></div>
+                        <div><div class="strong">#{n.memberName}</div><div class="muted small">#{fmt.label(n.type)} · #{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</div></div>
+                        <div><div>#{n.body}</div><ui:fragment rendered="#{not empty n.lastError}"><div class="muted small">#{n.lastError}</div></ui:fragment></div>
+                        <div class="end"><span class="pill #{fmt.tone(n.status)}">#{fmt.message(n.status)}#{n.attempts gt 1 ? ' · ' += n.attempts += ' tries' : ''}</span></div>
                     </div>
                 </ui:repeat>
             </div></div>
+        </section>
+
+        <section class="card pad" id="jobs">
+            <h2>Run the nightly jobs now</h2>
+            <p class="muted">StokVault does these by itself every night. Run them now if you don't want to wait, for example during a demo.</p>
+            <h:form styleClass="inline">
+                <h:commandButton value="Re-check all payouts" action="#{adminBean.runEligibility}" styleClass="btn"/>
+                <h:commandButton value="Send payment reminders" action="#{adminBean.sendReminders}" styleClass="btn"/>
+            </h:form>
         </section>
     </ui:fragment>
     </ui:define>

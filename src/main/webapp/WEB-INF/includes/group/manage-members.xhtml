@@ -1,0 +1,107 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!-- Manage group → Members: roles, payout order, adding and removing people -->
+    <p class="section-intro">Everyone in #{g.name}. You can change someone's role or their place in the payout line,
+        add a person, or remove someone who has left (their history is kept).</p>
+
+    <section class="card flush">
+        <div class="card-head">
+            <h2>#{fmt.count(groupBean.memberCount, 'member', 'members')}</h2>
+            <input type="search" placeholder="Search members" oninput="svSearch(this, 'member-list')" style="width:260px;max-width:100%"/>
+        </div>
+        <div class="scroll-x"><div class="min" id="member-list">
+            <div class="list-row list-head cols-members"><span>Name</span><span>Role</span><span>Phone</span><span>Place in line</span><span>This round</span><span></span></div>
+            <h:form>
+                <ui:repeat value="#{groupBean.memberList}" var="m">
+                    <div class="list-row cols-members" data-search="#{m.memberName} #{m.role} #{m.phoneNumber}" style="#{m.status eq 'ACTIVE' ? '' : 'opacity:.55'}">
+                        <div class="person"><span class="avatar">#{fmt.initials(m.memberName)}</span>
+                            <span class="name">#{m.memberName}<span class="sub">#{m.status eq 'ACTIVE' ? 'Since ' += fmt.date(m.joinedDate) : 'Left ' += fmt.date(m.leftDate)}</span></span></div>
+                        <div>
+                            <ui:fragment rendered="#{m.status eq 'ACTIVE' and (groupBean.committee or groupBean.admin)}">
+                                <div class="inline" style="gap:6px;flex-wrap:nowrap">
+                                    <h:selectOneMenu value="#{groupBean.roleEdits[m.memberId]}" pt:aria-label="Role">
+                                        <f:selectItems value="#{groupBean.roles}" var="ro" itemLabel="#{fmt.label(ro)}" itemValue="#{ro.name()}"/>
+                                    </h:selectOneMenu>
+                                    <h:commandButton value="Save" action="#{groupBean.saveRole(m.memberId)}" styleClass="btn sm"/>
+                                </div>
+                            </ui:fragment>
+                            <ui:fragment rendered="#{not (m.status eq 'ACTIVE' and (groupBean.committee or groupBean.admin))}"><span style="color:var(--text-2)">#{fmt.label(m.role)}</span></ui:fragment>
+                        </div>
+                        <span class="muted">#{m.phoneNumber}</span>
+                        <div>
+                            <ui:fragment rendered="#{m.status eq 'ACTIVE' and groupBean.officer}">
+                                <div class="inline" style="gap:6px;flex-wrap:nowrap">
+                                    <h:inputText value="#{groupBean.positionEdits[m.memberId]}" pt:type="number" pt:min="1" style="width:64px" pt:aria-label="Place in the payout line"/>
+                                    <h:commandButton value="Move" action="#{groupBean.savePosition(m.memberId)}" styleClass="btn sm"/>
+                                </div>
+                            </ui:fragment>
+                            <ui:fragment rendered="#{not (m.status eq 'ACTIVE' and groupBean.officer)}"><span style="color:var(--text-2)">#{m.status eq 'ACTIVE' ? fmt.ordinal(m.payoutPosition) : '—'}</span></ui:fragment>
+                        </div>
+                        <div><ui:fragment rendered="#{groupBean.cycleStatus(m.memberId) ne null}"><span class="pill #{fmt.tone(groupBean.cycleStatus(m.memberId))}">#{fmt.paidState(groupBean.cycleStatus(m.memberId))}</span></ui:fragment></div>
+                        <div class="end">
+                            <h:commandButton rendered="#{m.status eq 'ACTIVE' and groupBean.officer and m.role ne 'TREASURER'}" value="Remove"
+                                             action="#{groupBean.removeMember(m.memberId)}" styleClass="btn sm danger"
+                                             pt:onclick="return confirm('Remove this member from the stokvel? Their history is kept.')"/>
+                        </div>
+                    </div>
+                </ui:repeat>
+            </h:form>
+            <div class="empty no-match" style="display:none">No members match your search.</div>
+        </div></div>
+    </section>
+
+    <ui:fragment rendered="#{groupBean.officer and g.status ne 'CLOSED'}">
+        <div class="row">
+            <section class="card pad grow-1">
+                <h2>Add someone already on StokVault</h2>
+                <p class="muted">Find them by their mobile number or ID number.</p>
+                <h:form styleClass="form">
+                    <div class="inline" style="flex-wrap:nowrap">
+                        <h:inputText value="#{groupBean.lookup}" pt:type="search" pt:placeholder="082 123 4567" pt:aria-label="Mobile or ID number"/>
+                        <h:commandButton value="Find" action="#{groupBean.lookupMember}" styleClass="btn"/>
+                    </div>
+                    <ui:fragment rendered="#{groupBean.found ne null}">
+                        <div class="person" style="padding:12px;border:1px solid var(--border);border-radius:12px">
+                            <span class="avatar">#{fmt.initials(groupBean.found.fullName)}</span>
+                            <span class="name">#{groupBean.found.fullName}<span class="sub">#{groupBean.found.phoneNumber}</span></span>
+                        </div>
+                        <div class="field"><h:outputLabel for="arole" value="Role"/>
+                            <h:selectOneMenu id="arole" value="#{groupBean.addRole}">
+                                <f:selectItems value="#{groupBean.roles}" var="ro" itemLabel="#{fmt.label(ro)}" itemValue="#{ro}"/>
+                            </h:selectOneMenu></div>
+                        <div class="field"><h:outputLabel for="ajoined" value="Joined on"/>
+                            <h:inputText id="ajoined" value="#{groupBean.addJoined}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText>
+                            <span class="hint">They pay from this date.</span></div>
+                        <h:commandButton value="Add to the stokvel" action="#{groupBean.addMember}" styleClass="btn primary"/>
+                    </ui:fragment>
+                </h:form>
+            </section>
+
+            <section class="card pad grow-1">
+                <h2>Register someone new</h2>
+                <p class="muted">For someone who isn't on StokVault yet. They log in the first time with an SMS code.</p>
+                <h:form styleClass="form">
+                    <div class="field"><h:outputLabel for="rname" value="Full name"/><h:inputText id="rname" value="#{groupBean.regName}"/></div>
+                    <div class="field"><h:outputLabel for="rid" value="SA ID number"/><h:inputText id="rid" value="#{groupBean.regNationalId}" pt:inputmode="numeric" pt:maxlength="13"/>
+                        <span class="hint">Kept locked away; only the last 4 digits are ever shown.</span></div>
+                    <div class="field"><h:outputLabel for="rphone" value="Mobile number"/><h:inputText id="rphone" value="#{groupBean.regPhone}" pt:type="tel"/></div>
+                    <div class="field"><h:outputLabel for="remail" value="Email (optional, used if SMS fails)"/><h:inputText id="remail" value="#{groupBean.regEmail}" pt:type="email"/></div>
+                    <div class="field"><span class="label">Send messages by</span>
+                        <h:selectOneRadio value="#{groupBean.regChannel}" layout="lineDirection" styleClass="seg-radio">
+                            <f:selectItems value="#{groupBean.channels}" var="ch" itemLabel="#{fmt.label(ch)}" itemValue="#{ch}"/>
+                        </h:selectOneRadio></div>
+                    <div class="field"><h:outputLabel for="rrole" value="Role in this stokvel"/>
+                        <h:selectOneMenu id="rrole" value="#{groupBean.addRole}">
+                            <f:selectItems value="#{groupBean.roles}" var="ro" itemLabel="#{fmt.label(ro)}" itemValue="#{ro}"/>
+                        </h:selectOneMenu></div>
+                    <label class="check"><h:selectBooleanCheckbox value="#{groupBean.regConsent}"/>
+                        <span>They agreed that StokVault may keep their personal information (POPIA).</span></label>
+                    <h:commandButton value="Register and add" action="#{groupBean.registerAndAdd}" styleClass="btn primary"/>
+                </h:form>
+            </section>
+        </div>
+    </ui:fragment>
+</ui:composition>

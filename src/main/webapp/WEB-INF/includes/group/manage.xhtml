@@ -1,0 +1,20 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:ui="jakarta.faces.facelets">
+    <!--
+        "Manage group": everything a treasurer or committee member needs now and then, but not
+        every month. Nothing here was removed from the old tabs; it was only moved out of the way.
+    -->
+    <nav class="subnav" aria-label="Manage group">
+        <a href="#{base}&amp;tab=rounds" class="#{tab eq 'rounds' ? 'on' : ''}">Rounds &amp; payments</a>
+        <a href="#{base}&amp;tab=payouts" class="#{tab eq 'payouts' ? 'on' : ''}">Payouts</a>
+        <a href="#{base}&amp;tab=members" class="#{tab eq 'members' ? 'on' : ''}">Members</a>
+        <a href="#{base}&amp;tab=records" class="#{tab eq 'records' ? 'on' : ''}">Records &amp; reports</a>
+        <a href="#{base}&amp;tab=settings" class="#{tab eq 'settings' ? 'on' : ''}">Settings</a>
+    </nav>
+
+    <ui:fragment rendered="#{tab eq 'rounds'}"><ui:include src="/WEB-INF/includes/group/manage-rounds.xhtml"/></ui:fragment>
+    <ui:fragment rendered="#{tab eq 'payouts'}"><ui:include src="/WEB-INF/includes/group/manage-payouts.xhtml"/></ui:fragment>
+    <ui:fragment rendered="#{tab eq 'members'}"><ui:include src="/WEB-INF/includes/group/manage-members.xhtml"/></ui:fragment>
+    <ui:fragment rendered="#{tab eq 'records'}"><ui:include src="/WEB-INF/includes/group/manage-records.xhtml"/></ui:fragment>
+    <ui:fragment rendered="#{tab eq 'settings'}"><ui:include src="/WEB-INF/includes/group/manage-settings.xhtml"/></ui:fragment>
+</ui:composition>

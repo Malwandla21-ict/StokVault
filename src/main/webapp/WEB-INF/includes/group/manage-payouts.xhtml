@@ -1,0 +1,89 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!-- Manage group → Payouts: the payout order, planning a payout, and every payout with all its actions -->
+    <p class="section-intro">#{fmt.howItPaysOut(g.type, g.benefitAmount)} Before any payout goes ahead, StokVault checks that
+        enough members have paid. Payouts over <span class="amt">#{fmt.rand(g.approvalThreshold)}</span> also need a committee member's OK.</p>
+
+    <ui:fragment rendered="#{not empty groupBean.rotation}">
+        <section class="card flush">
+            <div class="card-head">
+                <h2>Payout order</h2>
+                <span class="muted">To change someone's place, go to Members</span>
+            </div>
+            <ui:repeat value="#{groupBean.rotation}" var="slot">
+                <div class="list-row cols-rotation #{slot.status eq 'NEXT' ? 'is-next' : ''}">
+                    <span class="rot-pos">#{slot.order lt 10 ? '0' : ''}#{slot.order}</span>
+                    <span class="strong">#{slot.name}</span>
+                    <span class="muted">#{slot.status eq 'RECEIVED' ? 'Paid ' += fmt.shortDate(slot.date) : (slot.status eq 'IN_PROGRESS' ? 'Planned ' += fmt.shortDate(slot.date) : fmt.cap(fmt.around(slot.date)))}</span>
+                    <span class="strong amt">#{fmt.rand(slot.amount)}</span>
+                    <div class="end">
+                        <span class="pill #{slot.status eq 'NEXT' ? 'solid' : fmt.tone(slot.status)}">#{slot.status eq 'NEXT' ? 'Next' : (slot.status eq 'IN_PROGRESS' ? 'Being paid' : (slot.status eq 'RECEIVED' ? 'Received ✓' : 'Waiting'))}</span>
+                    </div>
+                </div>
+            </ui:repeat>
+        </section>
+    </ui:fragment>
+
+    <ui:fragment rendered="#{groupBean.treasurer and groupBean.activeGroup}">
+        <section class="card pad">
+            <h2>#{g.type eq 'BURIAL' ? 'Start a funeral claim' : 'Plan a payout'}</h2>
+            <h:form styleClass="form grid">
+                <h:panelGroup layout="block" styleClass="field" rendered="#{g.type eq 'BURIAL'}">
+                    <h:outputLabel for="ben" value="Whose family is it for?"/>
+                    <h:selectOneMenu id="ben" value="#{groupBean.beneficiaryId}">
+                        <f:selectItems value="#{groupBean.activeMembers}" var="bm" itemLabel="#{bm.memberName}" itemValue="#{bm.memberId}"/>
+                    </h:selectOneMenu>
+                </h:panelGroup>
+                <h:panelGroup layout="block" styleClass="field" rendered="#{g.type eq 'GROCERY' or g.type eq 'INVESTMENT'}">
+                    <h:outputLabel for="pool" value="How much to share out (R)"/>
+                    <h:inputText id="pool" value="#{groupBean.amountToDistribute}" pt:type="number" pt:step="0.01" pt:placeholder="Everything in the stokvel"/>
+                </h:panelGroup>
+                <div class="field"><h:outputLabel for="pdate" value="Pay out on"/>
+                    <h:inputText id="pdate" value="#{groupBean.payoutDate}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                <div class="field"><h:outputLabel for="pnotes" value="Note (optional)"/><h:inputText id="pnotes" value="#{groupBean.runNotes}"/></div>
+                <h:commandButton value="#{g.type eq 'BURIAL' ? 'Start the claim' : 'Plan payout'}" action="#{groupBean.runPayout}" styleClass="btn primary"/>
+            </h:form>
+        </section>
+    </ui:fragment>
+
+    <section class="card flush">
+        <div class="card-head">
+            <h2>Every payout</h2>
+            <h:form styleClass="inline" rendered="#{groupBean.treasurer or groupBean.committee}">
+                <h:commandButton value="Check payouts again" action="#{groupBean.checkEligibility}" styleClass="btn sm"/>
+                <a class="link" href="#{base}&amp;tab=payouts">Refresh</a>
+            </h:form>
+        </div>
+        <h:form>
+            <ui:repeat value="#{groupBean.payoutList}" var="p">
+                <div class="list-row cols-payouts">
+                    <div class="person"><span class="avatar">#{fmt.initials(p.memberName)}</span>
+                        <span class="name">#{p.memberName}<span class="sub">#{p.cycleId ne null ? groupBean.roundOf(p.cycleId) += ' · ' : ''}#{fmt.shortDate(p.payoutDate)}</span></span></div>
+                    <div><div class="strong amt">#{fmt.rand(p.amount)}</div><span class="pill #{fmt.tone(p.status)}">#{fmt.payout(p.status)}</span></div>
+                    <div>
+                        <span class="pill #{fmt.tone(p.eligibilityCheck)}">#{fmt.checks(p.eligibilityCheck)}</span>
+                        <div class="muted small">#{p.eligibilityCheck eq 'FAILED' ? fmt.reason(p.eligibilityNotes) : ''}#{empty p.overrideReason ? '' : 'Allowed by ' += p.overriddenBy += ': ' += p.overrideReason}</div>
+                        <div class="muted small">#{empty p.approvedBy ? (p.requiresApproval ? 'Needs a committee OK' : '') : 'Approved by ' += p.approvedBy}#{p.paidAt ne null ? ' · Paid out ' += fmt.shortDateTime(p.paidAt) : ''}</div>
+                    </div>
+                    <div class="end">
+                        <ui:fragment rendered="#{(groupBean.treasurer or groupBean.committee) and p.status.open}">
+                            <h:inputText value="#{groupBean.notes[p.id]}" pt:placeholder="Reason" pt:aria-label="Reason" style="max-width:140px"/>
+                        </ui:fragment>
+                        <h:commandButton rendered="#{groupBean.treasurer and p.status eq 'SCHEDULED' and p.eligibilityCheck.allowsProgress()}"
+                                         value="Confirm" action="#{groupBean.confirm(p.id)}" styleClass="btn sm primary"/>
+                        <h:commandButton rendered="#{groupBean.canOverride(p)}" value="Allow anyway" action="#{groupBean.override(p.id)}" styleClass="btn sm"/>
+                        <h:commandButton rendered="#{groupBean.canApprove(p)}" value="Approve" action="#{groupBean.approve(p.id)}" styleClass="btn sm primary"/>
+                        <h:commandButton rendered="#{groupBean.treasurer and p.status eq 'CONFIRMED'}" value="Mark as paid out" action="#{groupBean.pay(p.id)}" styleClass="btn sm primary"
+                                         pt:onclick="return confirm('Only do this once the money has been sent. It leaves the stokvel balance.')"/>
+                        <h:commandButton rendered="#{(groupBean.treasurer or groupBean.committee) and p.status.open}"
+                                         value="Cancel" action="#{groupBean.cancel(p.id)}" styleClass="btn sm danger"/>
+                    </div>
+                </div>
+            </ui:repeat>
+        </h:form>
+        <ui:fragment rendered="#{empty groupBean.payoutList}"><div class="empty">No payouts yet.</div></ui:fragment>
+    </section>
+</ui:composition>

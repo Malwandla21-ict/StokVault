@@ -83,7 +83,7 @@ public class AdminBean implements Serializable {
         StokvelGroup[] created = new StokvelGroup[1];
         boolean ok = Ui.attempt(() -> created[0] = groups.create(new GroupRequest(name, description, type, contributionAmount,
                 frequency, startDate, approvalThreshold, completionThreshold, benefitAmount)),
-                "Group created as a draft. Add members and appoint a treasurer, then activate it.");
+                "Stokvel created. Now add its people and choose a treasurer, then activate it.");
         if (ok) {
             FacesContext.getCurrentInstance().getExternalContext()
                     .redirect("group.xhtml?id=" + created[0].getId() + "&tab=members");
@@ -107,11 +107,11 @@ public class AdminBean implements Serializable {
     }
 
     public void runEligibility() {
-        Ui.attempt(() -> Ui.info("Eligibility check started for all groups (job " + admin.startEligibilityCheckForAllGroups() + ")"), null);
+        Ui.attempt(() -> Ui.info("Re-checking every planned payout (job " + admin.startEligibilityCheckForAllGroups() + "). Refresh in a moment."), null);
     }
 
     public void sendReminders() {
-        Ui.attempt(() -> Ui.info(admin.sendRemindersNow() + " reminder(s) queued"), null);
+        Ui.attempt(() -> Ui.info(admin.sendRemindersNow() + " reminder(s) are being sent"), null);
         load();
     }
 

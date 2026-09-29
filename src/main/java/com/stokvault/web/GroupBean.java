@@ -55,16 +55,22 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * One group's workspace (app/group.xhtml?id=...&tab=...). What each person sees and can do
- * depends on their role in the group; the services enforce the same rules again, so hiding a
- * button is only for convenience, never the security boundary.
+ * One group's page (app/group.xhtml?id=...&tab=...). The main view ("home") depends on the
+ * person's role IN THIS GROUP: members see their payment, their turn and their history;
+ * the treasurer sees "This month" (payments to check, who hasn't paid, the payout); committee
+ * members also see the decisions waiting for them. Everything else lives under "Manage group"
+ * (tab = rounds, payouts, members, records or settings), for officers only.
+ * The services enforce the same rules again, so hiding a button is only for convenience,
+ * never the security boundary.
  */
 @Named
 @ViewScoped
 public class GroupBean implements Serializable {
 
     private static final long serialVersionUID = 1L;
-    private static final Set<String> TABS = Set.of("overview", "contributions", "payouts", "members", "audit", "settings");
+    private static final Set<String> TABS = Set.of("home", "rounds", "payouts", "members", "records", "settings");
+    /** Old tab names (links in older docs and bookmarks) and where they live now. */
+    private static final Map<String, String> OLD_TABS = Map.of("overview", "home", "contributions", "rounds", "audit", "records");
 
     @Inject private GroupService groups;
     @Inject private MembershipService memberships;
@@ -75,10 +81,11 @@ public class GroupBean implements Serializable {
     @Inject private AuditService audit;
     @Inject private MemberService members;
     @Inject private UserSession user;
+    @Inject private Format fmt;
 
     // URL parameters (f:viewParam)
     private UUID id;
-    private String tab = "overview";
+    private String tab = "home";
 
     // Loaded data
     private GroupSummary summary;
@@ -139,8 +146,9 @@ public class GroupBean implements Serializable {
 
     /** f:viewAction: runs on the first (non-postback) request for the page. */
     public void load() throws IOException {
+        tab = OLD_TABS.getOrDefault(tab, tab);
         if (!TABS.contains(tab)) {
-            tab = "overview";
+            tab = "home";
         }
         if (id == null) {
             FacesContext.getCurrentInstance().getExternalContext().redirect("index.xhtml");
@@ -148,6 +156,10 @@ public class GroupBean implements Serializable {
         }
         try {
             reload();
+            if (!tab.equals("home") && !isOfficer()) {
+                tab = "home"; // "Manage group" is for the treasurer, committee and Coop Office
+                reload();
+            }
         } catch (RuntimeException e) {
             Ui.error(Errors.message(e));
             FacesContext.getCurrentInstance().getExternalContext().redirect("index.xhtml");
@@ -158,37 +170,33 @@ public class GroupBean implements Serializable {
         summary = reports.summary(id);
         grid = null;
         gridByMember = Map.of();
+        // Used on every view: this round's payers, the payments I may see (all of them for
+        // officers, my own for members), the rounds (to name them by month), payouts and members
+        contributionList = contributions.list(id, null, null, null).stream().map(ContributionView::from).toList();
+        cycleList = cycles.list(id);
+        payoutList = payouts.list(id, null).stream().map(PayoutView::from).toList();
+        rotation = reports.rotation(id);
+        memberList = memberships.list(id, tab.equals("members")).stream().map(MembershipView::from).toList();
+        memberList.forEach(m -> {
+            roleEdits.putIfAbsent(m.memberId(), m.role().name());
+            positionEdits.putIfAbsent(m.memberId(), String.valueOf(m.payoutPosition()));
+        });
         if (summary.currentCycle() != null) {
-            // Who has paid the current cycle: shown on most tabs
             grid = cycles.grid(id, summary.currentCycle().id());
             gridByMember = grid.rows().stream().collect(java.util.stream.Collectors.toMap(CycleGrid.Row::memberId, r -> r));
-            if (amount == null) {
-                amount = summary.currentCycle().amountDue();
-            }
         }
-        if (tab.equals("overview")) {
-            activity = reports.activity(id, 6);
+        if (amount == null && summary.currentCycle() != null) {
+            // The payment window opens with what I still owe this round (or the round's amount)
+            BigDecimal owed = getMyOwed();
+            amount = owed.signum() > 0 && !isTreasurer() ? owed : summary.currentCycle().amountDue();
         }
         if (payerId == null && isTreasurer() && !getUnpaidOthers().isEmpty()) {
             payerId = getUnpaidOthers().get(0).memberId(); // "Record payment" opens on the first unpaid member
         }
-        if (tab.equals("contributions")) {
-            contributionList = contributions.list(id, null, null, null).stream().map(ContributionView::from).toList();
-            cycleList = cycles.list(id);
+        if (tab.equals("rounds")) {
             matrix = cycles.matrix(id, 6);
         }
-        if (tab.equals("payouts")) {
-            payoutList = payouts.list(id, null).stream().map(PayoutView::from).toList();
-            rotation = reports.rotation(id);
-        }
-        if (tab.equals("payouts") || tab.equals("members") || tab.equals("contributions")) {
-            memberList = memberships.list(id, tab.equals("members")).stream().map(MembershipView::from).toList();
-            memberList.forEach(m -> {
-                roleEdits.putIfAbsent(m.memberId(), m.role().name());
-                positionEdits.putIfAbsent(m.memberId(), String.valueOf(m.payoutPosition()));
-            });
-        }
-        if (tab.equals("audit") && isOfficer()) {
+        if (tab.equals("records") && isOfficer()) {
             auditList = audit.entries(groups.find(id), 200).stream().map(AuditEntryView::from).toList();
             chain = audit.verify(groups.find(id));
         }
@@ -243,6 +251,139 @@ public class GroupBean implements Serializable {
         return summary.group().myRole() != null;
     }
 
+    /** "Manage group" and the sub-sections under it. */
+    public boolean isManage() {
+        return !tab.equals("home");
+    }
+
+    /** The treasurer's "This month" board; the Coop Office sees it too (read-only) when not a member. */
+    public boolean isShowBoard() {
+        return isTreasurer() || (isAdmin() && !isMemberOfGroup());
+    }
+
+    // ---- read-only helpers for the simplified pages (they only reshape data loaded above) ----
+
+    private UUID me() {
+        return user.getMe().id();
+    }
+
+    /** My line for the current round (PAID, AWAITING_VERIFICATION, PARTIAL, OUTSTANDING), or null. */
+    public CycleGrid.Row getMyRow() {
+        return gridByMember.get(me());
+    }
+
+    /** What I still have to pay this round (nothing if paid or waiting to be checked). */
+    public BigDecimal getMyOwed() {
+        CycleGrid.Row row = getMyRow();
+        if (row == null) {
+            return BigDecimal.ZERO;
+        }
+        return row.amountDue().subtract(row.verified()).subtract(row.awaitingVerification()).max(BigDecimal.ZERO);
+    }
+
+    /** Can I pay now? (an open round, and I still owe something for it) */
+    public boolean isCanPay() {
+        return isCanRecord() && getMyOwed().signum() > 0;
+    }
+
+    /** My payments, newest first. */
+    public List<ContributionView> getMyContributions() {
+        UUID me = me();
+        return contributionList.stream().filter(c -> c.memberId().equals(me)).toList();
+    }
+
+    /** A payment of mine in the current round that the treasurer did not accept, if nothing replaced it. */
+    public ContributionView getMyRejected() {
+        CycleGrid.Row row = getMyRow();
+        if (row == null || row.status().equals("PAID") || row.status().equals("AWAITING_VERIFICATION")) {
+            return null;
+        }
+        UUID cycleId = summary.currentCycle().id();
+        return getMyContributions().stream()
+                .filter(c -> c.cycleId().equals(cycleId) && c.verificationStatus() == VerificationStatus.REJECTED)
+                .findFirst().orElse(null);
+    }
+
+    /** The round a payment belongs to, by name ("September"), instead of "Cycle 4". */
+    public String roundOf(UUID cycleId) {
+        return cycleList.stream().filter(cy -> cy.id().equals(cycleId)).findFirst()
+                .map(cy -> fmtRound(cy.dueDate())).orElse("");
+    }
+
+    private String fmtRound(LocalDate due) {
+        return fmt.round(due, summary.group().frequency());
+    }
+
+    /** The name of the round that opens next ("October"), for the "Open the ... round" button. */
+    public String getNextRoundName() {
+        CycleView cur = summary.currentCycle();
+        LocalDate due = cur == null ? summary.group().startDate() : summary.group().frequency().next(cur.dueDate());
+        return fmtRound(due);
+    }
+
+    /** My place in the payout line (rotational groups), or null. */
+    public RotationSlot getMySlot() {
+        UUID me = me();
+        return rotation.stream().filter(s -> s.memberId().equals(me)).findFirst().orElse(null);
+    }
+
+    /** How many people are ahead of me, plus one: "5th in line". Only for people still waiting. */
+    public int getMyPlaceInLine() {
+        RotationSlot mine = getMySlot();
+        if (mine == null) {
+            return 0;
+        }
+        return (int) rotation.stream()
+                .filter(s -> (s.status().equals("NEXT") || s.status().equals("UPCOMING")) && s.order() <= mine.order())
+                .count();
+    }
+
+    /** "To check": payments waiting for a decision that this person should look at. */
+    public List<ContributionView> getToCheck() {
+        List<ContributionView> unresolved = getUnresolved();
+        if (isCommittee()) {
+            // The treasurer can't check their own payment, so that one comes to the committee
+            Set<UUID> treasurers = memberList.stream().filter(m -> m.role() == MembershipRole.TREASURER)
+                    .map(MembershipView::memberId).collect(java.util.stream.Collectors.toSet());
+            return unresolved.stream().filter(c -> treasurers.contains(c.memberId())).toList();
+        }
+        return isShowBoard() ? unresolved : List.of();
+    }
+
+    /** "Not paid yet": this round's members with nothing (or only part) verified and nothing waiting. */
+    public List<CycleGrid.Row> getNotPaid() {
+        return getThisMonth().stream().filter(r -> r.status().equals("OUTSTANDING") || r.status().equals("PARTIAL")).toList();
+    }
+
+    /** "Paid ✓": this round's members who have paid in full. */
+    public List<CycleGrid.Row> getPaidRows() {
+        return getThisMonth().stream().filter(r -> r.status().equals("PAID")).toList();
+    }
+
+    /** Payouts still in progress (planned, waiting for approval or ready to pay). */
+    public List<PayoutView> getOpenPayouts() {
+        return payoutList.stream().filter(p -> p.status().isOpen()).toList();
+    }
+
+    /** The first three payouts in progress (the payout card; the rest are under Manage group). */
+    public List<PayoutView> getFirstOpenPayouts() {
+        return getOpenPayouts().stream().limit(3).toList();
+    }
+
+    /** Payouts waiting for this committee member: to approve, or checks failed and needing a decision. */
+    public List<PayoutView> getForCommittee() {
+        return payoutList.stream().filter(p -> canApprove(p) || canOverride(p)).toList();
+    }
+
+    /** Active members (the context card and "More about this group"). */
+    public long getMemberCount() {
+        return memberList.stream().filter(m -> m.status().name().equals("ACTIVE")).count();
+    }
+
+    public boolean isMe(UUID memberId) {
+        return me().equals(memberId);
+    }
+
     // ---- contributions ----
 
     public void recordContribution() {
@@ -250,23 +391,36 @@ public class GroupBean implements Serializable {
         act(() -> {
             ContributionService.Recorded recorded = contributions.record(id,
                     new ContributionRequest(payer, null, amount, reference, method, paidOn));
-            String status = Ui.label(recorded.contribution().getVerificationStatus()).toLowerCase();
-            Ui.info(recorded.created()
-                    ? "Contribution recorded (" + status + ")"
-                    + (recorded.contribution().getReviewNote() == null ? "" : ": " + recorded.contribution().getReviewNote())
-                    : "That payment (same member, cycle and reference) was already recorded; nothing was duplicated");
+            VerificationStatus status = recorded.contribution().getVerificationStatus();
+            String note = recorded.contribution().getReviewNote();
+            if (!recorded.created()) {
+                Ui.info("That payment was already recorded (same person, round and reference), so nothing changed");
+            } else if (status == VerificationStatus.VERIFIED) {
+                Ui.info("Payment recorded ✓");
+            } else if (status == VerificationStatus.PENDING_REVIEW) {
+                Ui.info("Payment recorded, but it needs a second look" + (note == null ? "" : ": " + note));
+            } else {
+                Ui.info(payer == null && !isTreasurer()
+                        ? "Thank you! Your treasurer will check your payment against the bank statement."
+                        : "Payment recorded. A committee member will check it.");
+            }
             reference = null;
         }, null);
     }
 
     public void verify(UUID contributionId) {
         act(() -> contributions.verify(id, contributionId, new VerificationDecision(VerificationStatus.VERIFIED, notes.get(contributionId))),
-                "Contribution verified");
+                "Marked as paid ✓");
     }
 
     public void reject(UUID contributionId) {
+        String reason = notes.get(contributionId);
+        if (reason == null || reason.isBlank()) {
+            Ui.error("Say why you are not accepting this payment. The member will see the reason.");
+            return;
+        }
         act(() -> contributions.verify(id, contributionId, new VerificationDecision(VerificationStatus.REJECTED, notes.get(contributionId))),
-                "Contribution rejected");
+                "Payment not accepted. The member has been told why.");
     }
 
     public List<ContributionView> getUnresolved() {
@@ -322,16 +476,16 @@ public class GroupBean implements Serializable {
     // ---- cycles ----
 
     public void openCycle() {
-        act(() -> cycles.open(id, newCycleDue), "New contribution cycle opened");
+        act(() -> cycles.open(id, newCycleDue), "The new round is open. Members can now pay.");
         newCycleDue = null;
     }
 
     public void closeCycle(UUID cycleId) {
-        act(() -> cycles.close(id, cycleId), "Cycle closed");
+        act(() -> cycles.close(id, cycleId), "Round closed");
     }
 
     public void reconcileCycle(UUID cycleId) {
-        act(() -> cycles.reconcile(id, cycleId), "Cycle reconciled");
+        act(() -> cycles.reconcile(id, cycleId), "Round marked as balanced ✓");
     }
 
     public boolean isCycleOpen() {
@@ -343,44 +497,55 @@ public class GroupBean implements Serializable {
     public void runPayout() {
         act(() -> {
             int count = payouts.run(id, new PayoutRunRequest(null, beneficiaryId, amountToDistribute, payoutDate, runNotes)).size();
-            Ui.info(count + " payout(s) scheduled. The automated eligibility check is running; refresh in a moment to see the result.");
+            Ui.info((count == 1 ? "Payout planned." : count + " payouts planned.")
+                    + " StokVault is now checking that everyone has paid. Refresh in a moment to see the result.");
             runNotes = null;
             beneficiaryId = null;
         }, null);
     }
 
     public void checkEligibility() {
-        act(() -> payouts.startEligibilityCheck(id), "Eligibility check started in the background; refresh in a moment");
+        act(() -> payouts.startEligibilityCheck(id), "Checking again. Refresh in a moment to see the result.");
     }
 
     public void confirm(UUID payoutId) {
         act(() -> {
             PayoutStatus result = payouts.confirm(id, payoutId).getStatus();
             Ui.info(result == PayoutStatus.PENDING_APPROVAL
-                    ? "Above the approval threshold: sent to the committee for four-eyes approval"
-                    : "Payout confirmed; it can now be paid");
+                    ? "Confirmed. It is a big payout, so a committee member must approve it too."
+                    : "Confirmed ✓ You can pay it out now.");
         }, null);
     }
 
     public void approve(UUID payoutId) {
-        act(() -> payouts.approve(id, payoutId), "Payout approved");
+        act(() -> payouts.approve(id, payoutId), "Approved ✓ The treasurer can now pay it out.");
     }
 
     public void override(UUID payoutId) {
         String reason = notes.get(payoutId);
         if (reason == null || reason.isBlank()) {
-            Ui.error("Give a reason for overriding the eligibility check");
+            Ui.error("Say why the committee is allowing this payout. It is kept in the records.");
             return;
         }
-        act(() -> payouts.override(id, payoutId, reason), "Eligibility check overridden; the reason is in the audit trail");
+        act(() -> payouts.override(id, payoutId, reason), "Allowed. Your reason is kept in the records.");
     }
 
     public void pay(UUID payoutId) {
-        act(() -> payouts.pay(id, payoutId), "Payout marked as paid; the member has been notified");
+        act(() -> payouts.pay(id, payoutId), "Marked as paid out ✓ The member has been sent an SMS.");
     }
 
     public void cancel(UUID payoutId) {
         act(() -> payouts.cancel(id, payoutId, notes.get(payoutId)), "Payout cancelled");
+    }
+
+    /** Committee: say no to a big payout (it is cancelled, with the reason). */
+    public void decline(UUID payoutId) {
+        String reason = notes.get(payoutId);
+        if (reason == null || reason.isBlank()) {
+            Ui.error("Say why you are declining. It is kept in the records.");
+            return;
+        }
+        act(() -> payouts.cancel(id, payoutId, "Declined by committee: " + reason), "Payout declined");
     }
 
     public boolean canOverride(PayoutView p) {

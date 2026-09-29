@@ -54,7 +54,7 @@
                 <div class="list-row" style="grid-template-columns:120px minmax(0,1fr) 110px">
                     <span class="muted">#{fmt.dateTime(n.createdAt)}</span>
                     <div><div>#{n.body}</div><div class="muted" style="font-size:12px">#{fmt.label(n.deliveredChannel ne null ? n.deliveredChannel : n.channel)}</div></div>
-                    <div class="end"><span class="pill #{fmt.tone(n.status)}">#{fmt.label(n.status)}</span></div>
+                    <div class="end"><span class="pill #{fmt.tone(n.status)}">#{fmt.message(n.status)}</span></div>
                 </div>
             </ui:repeat>
             <ui:fragment rendered="#{empty accountBean.notifications}"><div class="empty">No messages yet.</div></ui:fragment>

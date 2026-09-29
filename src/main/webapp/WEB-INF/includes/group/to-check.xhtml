@@ -1,0 +1,48 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!--
+        "To check": payments members say they've made, with the decision right there.
+        Rejecting asks for a reason first (the member is told why).
+        Used by the treasurer's board and, for the treasurer's own payment, by the committee.
+    -->
+    <section class="card flush" id="to-check">
+        <div class="card-head">
+            <div>
+                <h2>To check <ui:fragment rendered="#{not empty groupBean.toCheck}"><span class="count">#{groupBean.toCheck.size()}</span></ui:fragment></h2>
+                <p class="muted">#{groupBean.committee ? 'The treasurer paid too. Someone else must check their payment.'
+                                   : 'Members say they paid. Check each one against the bank statement or receipt book.'}</p>
+            </div>
+        </div>
+        <h:form>
+            <ui:repeat value="#{groupBean.toCheck}" var="tc">
+                <div class="task-row">
+                    <div class="person">
+                        <span class="avatar">#{fmt.initials(tc.memberName)}</span>
+                        <span class="name">#{tc.memberName}
+                            <span class="sub">#{groupBean.roundOf(tc.cycleId)} · paid #{fmt.shortDate(tc.contributionDate)} · #{fmt.method(tc.paymentMethod)} · reference #{tc.paymentReference}</span></span>
+                    </div>
+                    <span class="strong amt task-amount">#{fmt.rand(tc.amount)}</span>
+                    <ui:fragment rendered="#{tc.verificationStatus eq 'PENDING_REVIEW'}">
+                        <div class="task-note">Needs a second look#{empty tc.reviewNote ? '' : ': ' += tc.reviewNote}</div>
+                    </ui:fragment>
+                    <div class="task-actions">
+                        <ui:fragment rendered="#{groupBean.canVerify(tc)}">
+                            <h:commandButton value="Mark as paid ✓" action="#{groupBean.verify(tc.id)}" styleClass="btn sm primary"/>
+                            <button type="button" class="link danger" onclick="return svReveal(this, 'reject-#{tc.id}')">Not accepted…</button>
+                            <div class="reason-box" id="reject-#{tc.id}" hidden="hidden">
+                                <h:inputText value="#{groupBean.notes[tc.id]}" pt:placeholder="Why? The member will see this" pt:aria-label="Reason"/>
+                                <h:commandButton value="Don't accept" action="#{groupBean.reject(tc.id)}" styleClass="btn sm danger"/>
+                            </div>
+                        </ui:fragment>
+                        <ui:fragment rendered="#{not groupBean.canVerify(tc) and groupBean.isMe(tc.memberId)}">
+                            <span class="muted small">Your own payment: a committee member checks it.</span>
+                        </ui:fragment>
+                    </div>
+                </div>
+            </ui:repeat>
+        </h:form>
+        <ui:fragment rendered="#{empty groupBean.toCheck}"><div class="empty">Nothing to check ✓</div></ui:fragment>
+    </section>
+</ui:composition>

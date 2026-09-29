@@ -48,9 +48,8 @@
             <span class="avatar dark">#{fmt.initials(user.me.fullName)}</span>
             <div class="who">
                 <span>#{user.me.fullName}</span>
-                <span>#{user.roleLabel} ·
-                    <h:form style="display:inline"><h:commandLink value="Log out" action="#{user.logout}" styleClass="logout"/></h:form>
-                </span>
+                <!-- Roles are per stokvel, so only the platform-wide Coop Office role is shown here -->
+                <span>#{user.admin ? 'Coop Office · ' : ''}<h:form style="display:inline"><h:commandLink value="Log out" action="#{user.logout}" styleClass="logout"/></h:form></span>
             </div>
         </div>
     </aside>

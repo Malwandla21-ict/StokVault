@@ -2,54 +2,61 @@
                 xmlns:h="jakarta.faces.html"
                 xmlns:ui="jakarta.faces.facelets"
                 template="/WEB-INF/templates/layout.xhtml">
-    <!-- Member dashboard (SDD 6.1): my position in each of my stokvels -->
+    <!--
+        Home (SDD 6.1 Member dashboard). Answers "what do I need to do right now?":
+        officers first see their to-dos across all their stokvels, then everyone sees one card per
+        stokvel with one status line and at most one button, most urgent first.
+    -->
     <ui:param name="nav" value="home"/>
     <ui:define name="title">My stokvels</ui:define>
     <ui:define name="heading">#{fmt.greeting()}, #{user.firstName}</ui:define>
     <ui:define name="subtitle">
-        #{empty dashboardBean.positions ? (user.admin ? 'Coop Office overview of every stokvel on the platform' : 'You are not in a stokvel yet')
-          : 'You belong to ' += dashboardBean.positions.size() += (dashboardBean.positions.size() eq 1 ? ' stokvel' : ' stokvels')}
+        <ui:fragment rendered="#{empty dashboardBean.cards}">#{user.admin ? 'Every stokvel on StokVault' : 'You are not in a stokvel yet'}</ui:fragment>
+        <ui:fragment rendered="#{not empty dashboardBean.cards}">#{dashboardBean.dueCount eq 0 ? 'You have nothing to pay right now ✓'
+            : 'You have ' += fmt.count(dashboardBean.dueCount, 'payment', 'payments') += ' to make'}</ui:fragment>
     </ui:define>
 
     <ui:define name="content">
-        <h:panelGroup layout="block" styleClass="callout info" rendered="#{empty dashboardBean.positions and not user.admin}">
+        <h:panelGroup layout="block" styleClass="callout info" rendered="#{empty dashboardBean.cards and not user.admin}">
             Ask your stokvel's treasurer to add you, using the mobile number you log in with.
         </h:panelGroup>
 
+        <!-- Treasurers and committee members: their to-dos, each linking to where it's done -->
+        <ui:fragment rendered="#{not empty dashboardBean.attention}">
+            <section class="card flush attention">
+                <div class="card-head"><h2>Needs your attention</h2></div>
+                <ui:repeat value="#{dashboardBean.attention}" var="a">
+                    <a class="todo" href="#{a.link}">
+                        <span class="todo-text amt-text">#{a.text}<span class="sub">#{a.groupName}</span></span>
+                        <span class="go" aria-hidden="true">→</span>
+                    </a>
+                </ui:repeat>
+            </section>
+        </ui:fragment>
+
         <div class="group-cards">
-            <ui:repeat value="#{dashboardBean.positions}" var="p">
-                <article class="card pad group-card">
-                    <div class="inline" style="justify-content:space-between">
+            <ui:repeat value="#{dashboardBean.cards}" var="c">
+                <article class="card pad group-card state-#{c.state}">
+                    <div class="card-top">
                         <div>
-                            <span class="kicker">#{fmt.label(p.type)} stokvel</span>
-                            <h2 style="font-size:19px;font-weight:800;font-stretch:112%;margin-top:2px"><a href="group.xhtml?id=#{p.groupId}" style="color:var(--deep)">#{p.groupName}</a></h2>
+                            <span class="kicker">#{c.kind}</span>
+                            <h2><a href="group.xhtml?id=#{c.groupId}">#{c.name}</a></h2>
                         </div>
-                        <span class="pill #{p.role eq 'MEMBER' ? '' : 'good'}">#{fmt.label(p.role)}</span>
+                        <ui:fragment rendered="#{c.role ne 'MEMBER'}"><span class="pill good">#{fmt.label(c.role)}</span></ui:fragment>
                     </div>
 
-                    <ui:fragment rendered="#{p.currentCycleDue ne null}">
-                        <div class="inline" style="justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--row-border)">
-                            <span>This cycle: <strong class="amt">#{fmt.rand(p.currentCycleAmount)}</strong> due #{fmt.shortDate(p.currentCycleDue)}</span>
-                            <span class="pill #{p.paidCurrentCycle ? 'good' : 'warn'}">#{p.paidCurrentCycle ? 'Paid' : (p.myAwaitingVerification gt 0 ? 'Awaiting verification' : 'Not paid yet')}</span>
-                        </div>
+                    <div class="status-line">
+                        <span class="headline amt-text">#{c.headline}</span>
+                        <span class="muted amt-text">#{c.detail}</span>
+                    </div>
+
+                    <ui:fragment rendered="#{c.turn ne null}">
+                        <div class="turn #{c.turnIsNext ? 'next' : ''}">#{c.turn}</div>
                     </ui:fragment>
 
-                    <dl class="facts">
-                        <dt>I've paid in</dt><dd class="amt">#{fmt.rand(p.myVerifiedTotal)}</dd>
-                        <dt>Arrears</dt><dd style="color:#{fmt.positive(p.myArrears) ? 'var(--warn)' : 'inherit'}"><span class="amt">#{fmt.rand(p.myArrears)}</span></dd>
-                        <dt>Received so far</dt><dd class="amt">#{fmt.rand(p.myReceived)}</dd>
-                        <dt>Group balance</dt><dd class="amt">#{fmt.rand(p.groupBalance)}</dd>
-                    </dl>
-
-                    <ui:fragment rendered="#{p.queuePosition ne null}">
-                        <div class="turn #{p.queuePosition eq 1 ? 'next' : ''}">
-                            #{p.queuePosition eq 1 ? 'You are next in the rotation' : 'You are number ' += p.queuePosition += ' in line'} · around #{fmt.shortDate(p.nextPayoutEstimate)}
-                        </div>
-                    </ui:fragment>
-
-                    <div class="inline" style="margin-top:auto">
-                        <a class="btn primary sm" href="group.xhtml?id=#{p.groupId}">Open</a>
-                        <a class="btn sm" href="group.xhtml?id=#{p.groupId}&amp;tab=payouts">Payouts</a>
+                    <div class="card-actions">
+                        <ui:fragment rendered="#{c.pay}"><a class="btn primary" href="group.xhtml?id=#{c.groupId}&amp;pay=1">Pay now</a></ui:fragment>
+                        <a class="link" href="group.xhtml?id=#{c.groupId}">Open #{c.name} →</a>
                     </div>
                 </article>
             </ui:repeat>
@@ -57,17 +64,18 @@
 
         <ui:fragment rendered="#{user.admin}">
             <section class="card flush">
-                <div class="card-head"><h2>All stokvels on the platform</h2><a class="btn sm" href="admin.xhtml">Coop Office</a></div>
+                <div class="card-head">
+                    <div><h2>All stokvels</h2><p class="muted">Every stokvel on StokVault. Open one to see how it's doing.</p></div>
+                    <a class="link" href="admin.xhtml">Coop Office →</a>
+                </div>
                 <ui:repeat value="#{dashboardBean.allGroups}" var="gr">
-                    <div class="list-row" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 110px">
-                        <a class="strong" href="group.xhtml?id=#{gr.id}">#{gr.name}</a>
-                        <span class="muted">#{fmt.label(gr.type)}</span>
-                        <span class="amt">#{fmt.rand(gr.contributionAmount)}</span>
-                        <span class="muted">#{fmt.label(gr.frequency)}</span>
-                        <div class="end"><span class="pill #{fmt.tone(gr.status)}">#{fmt.label(gr.status)}</span></div>
-                    </div>
+                    <a class="list-row cols-groups row-link" href="group.xhtml?id=#{gr.id}">
+                        <span class="strong">#{gr.name}</span>
+                        <span class="muted">#{fmt.label(gr.type)} · <span class="amt">#{fmt.rand(gr.contributionAmount)}</span> #{fmt.label(gr.frequency).toLowerCase()}</span>
+                        <div class="end"><span class="pill #{fmt.tone(gr.status)}">#{fmt.groupState(gr.status)}</span></div>
+                    </a>
                 </ui:repeat>
-                <ui:fragment rendered="#{empty dashboardBean.allGroups}"><div class="empty">No stokvels yet. Register one under Coop Office.</div></ui:fragment>
+                <ui:fragment rendered="#{empty dashboardBean.allGroups}"><div class="empty">No stokvels yet. Register one in the Coop Office.</div></ui:fragment>
             </section>
         </ui:fragment>
     </ui:define>
