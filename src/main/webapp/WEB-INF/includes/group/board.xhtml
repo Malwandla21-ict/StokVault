@@ -1,0 +1,95 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets">
+    <!--
+        The treasurer's "This month" board: what to check, who hasn't paid, who has, and the
+        one next step for the payout. (The Coop Office sees it read-only.)
+    -->
+
+    <!-- No round open: opening one is the next job -->
+    <ui:fragment rendered="#{g.status eq 'ACTIVE' and not groupBean.cycleOpen}">
+        <section class="card pad next-step">
+            <h2>No round is open for payments</h2>
+            <p class="muted">Open the next round so members can pay. They get an SMS reminder before it's due.</p>
+            <h:form rendered="#{groupBean.treasurer}">
+                <h:commandButton value="Open the #{groupBean.nextRoundName} round" action="#{groupBean.openCycle}" styleClass="btn primary"/>
+            </h:form>
+            <p class="muted small">Need a different due date? Use <a href="#{base}&amp;tab=rounds">Manage group → Rounds</a>.</p>
+        </section>
+    </ui:fragment>
+
+    <!-- How the round is going -->
+    <ui:fragment rendered="#{groupBean.cycleOpen}">
+        <section class="hero compact">
+            <img class="watermark" src="#{request.contextPath}/resources/brand/stokvault-1a-symbol-reversed.svg" alt=""/>
+            <div class="top">
+                <span class="label">#{roundName} round</span>
+                <span>#{cur.outstandingPayers eq 0 ? 'Was due ' += fmt.day(cur.dueDate) : fmt.cap(fmt.dueText(cur.dueDate))}</span>
+            </div>
+            <div class="amount">
+                <span class="now amt">#{fmt.rand(cur.verifiedTotal)}</span>
+                <span class="of">of <span class="amt">#{fmt.rand(cur.target)}</span> collected</span>
+            </div>
+            <div>
+                <div class="bar"><div style="width:#{cur.collectedPercent}%"></div></div>
+                <div class="bar-legend">
+                    <span>#{cur.paidInFull} of #{cur.expectedPayers} members paid</span>
+                    <span class="soft">#{fmt.positive(cur.stillToCome) ? '' : 'Everything is in ✓'}<ui:fragment rendered="#{fmt.positive(cur.stillToCome)}"><span class="amt">#{fmt.rand(cur.stillToCome)}</span> still to come</ui:fragment></span>
+                </div>
+            </div>
+        </section>
+    </ui:fragment>
+
+    <div class="row">
+        <div class="stack grow-2">
+            <ui:include src="/WEB-INF/includes/group/to-check.xhtml"/>
+
+            <ui:fragment rendered="#{groupBean.cycleOpen}">
+                <section class="card flush" id="not-paid">
+                    <div class="card-head">
+                        <div>
+                            <h2>Not paid yet <ui:fragment rendered="#{not empty groupBean.notPaid}"><span class="count">#{groupBean.notPaid.size()}</span></ui:fragment></h2>
+                            <p class="muted">When someone pays you in cash, or you see their money in the bank, record it here.</p>
+                        </div>
+                    </div>
+                    <ui:repeat value="#{groupBean.notPaid}" var="unpaidRow">
+                        <div class="task-row">
+                            <div class="person">
+                                <span class="avatar">#{fmt.initials(unpaidRow.memberName)}</span>
+                                <span class="name">#{unpaidRow.memberName}#{groupBean.isMe(unpaidRow.memberId) ? ' (you)' : ''}
+                                    <span class="sub">#{unpaidRow.status eq 'PARTIAL' ? 'Part paid' : fmt.cap(fmt.dueText(cur.dueDate))}</span></span>
+                            </div>
+                            <span class="task-amount"><span class="muted small">Owes </span><span class="strong amt">#{fmt.rand(fmt.minus(unpaidRow.amountDue, unpaidRow.verified))}</span></span>
+                            <div class="task-actions">
+                                <ui:fragment rendered="#{groupBean.treasurer and groupBean.canRecord}">
+                                    <button type="button" class="btn sm" onclick="return svOpen('record', 'payer', '#{groupBean.isMe(unpaidRow.memberId) ? '' : unpaidRow.memberId}')">Record payment</button>
+                                </ui:fragment>
+                            </div>
+                        </div>
+                    </ui:repeat>
+                    <ui:fragment rendered="#{empty groupBean.notPaid}"><div class="empty">Everyone has paid or is being checked ✓</div></ui:fragment>
+                </section>
+
+                <details class="card flush fold" id="paid">
+                    <summary>Paid ✓ <span class="count good">#{groupBean.paidRows.size()}</span></summary>
+                    <ui:repeat value="#{groupBean.paidRows}" var="paidRow">
+                        <div class="plain-row">
+                            <span>#{paidRow.memberName}#{groupBean.isMe(paidRow.memberId) ? ' (you)' : ''}</span>
+                            <span class="strong amt">#{fmt.rand(paidRow.verified)}</span>
+                        </div>
+                    </ui:repeat>
+                    <ui:fragment rendered="#{empty groupBean.paidRows}"><div class="empty">Nobody has paid in full yet.</div></ui:fragment>
+                </details>
+            </ui:fragment>
+        </div>
+
+        <div class="stack grow-1">
+            <ui:include src="/WEB-INF/includes/group/payout-card.xhtml"/>
+            <section class="card pad manage-link">
+                <h2>Manage group</h2>
+                <p class="muted">Rounds, the payment grid, all payouts, members, records and settings.</p>
+                <a class="link" href="#{base}&amp;tab=rounds">Open Manage group →</a>
+            </section>
+        </div>
+    </div>
+</ui:composition>

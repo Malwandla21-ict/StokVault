@@ -22,6 +22,19 @@
                 el.removeAttribute("data-amt");
             }
         });
+        // Sentences with an amount inside ("R 500 due Fri 3 Oct"): mask just the amount
+        document.querySelectorAll(".amt-text").forEach(function (el) {
+            var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            for (var node = walker.nextNode(); node; node = walker.nextNode()) {
+                if (hidden) {
+                    if (node.svOriginal === undefined) { node.svOriginal = node.nodeValue; }
+                    node.nodeValue = node.svOriginal.replace(/R[\s\u00a0\u202f]?\d+(?:[\s\u00a0\u202f]\d{3})*(?:,\d\d)?/g, "R •••••");
+                } else if (node.svOriginal !== undefined) {
+                    node.nodeValue = node.svOriginal;
+                    delete node.svOriginal;
+                }
+            }
+        });
     }
 
     function isHidden() {
@@ -39,7 +52,7 @@
     window.svOpen = function (id, fieldName, value) {
         var dialog = document.getElementById(id);
         if (!dialog) { return false; }
-        if (fieldName && value) {
+        if (fieldName && value !== undefined) {
             dialog.querySelectorAll("[name$='" + fieldName + "']").forEach(function (input) {
                 if (input.type === "radio") { input.checked = input.value === value; }
                 else { input.value = value; }
@@ -91,5 +104,35 @@
         document.querySelectorAll("dialog.modal").forEach(function (d) {
             d.addEventListener("click", function (e) { if (e.target === d) { d.close(); } });
         });
+        // "Pay now" on the home page links to group.xhtml?...&pay=1: open the payment window
+        if (/[?&]pay=1\b/.test(location.search)) {
+            svOpen("record");
+        }
+        // A link to a section inside a closed <details> (e.g. #to-check): open it and show it
+        openTarget();
+        window.addEventListener("hashchange", openTarget);
     });
+
+    function openTarget() {
+        if (!location.hash) { return; }
+        var target = document.getElementById(location.hash.substring(1));
+        if (!target) { return; }
+        for (var el = target; el; el = el.parentElement) {
+            if (el.tagName === "DETAILS") { el.open = true; }
+        }
+        if (target.tagName === "DETAILS") { target.open = true; }
+        target.scrollIntoView({block: "start"});
+    }
+
+    // ---- "Reject" and similar actions that need a reason: show the reason box first
+    window.svReveal = function (button, id) {
+        var box = document.getElementById(id);
+        if (box) {
+            box.hidden = false;
+            var input = box.querySelector("input, textarea");
+            if (input) { input.focus(); }
+        }
+        button.hidden = true;
+        return false;
+    };
 })();

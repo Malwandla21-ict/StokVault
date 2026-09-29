@@ -1,0 +1,59 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!--
+        Committee decisions (the four-eyes rule): big payouts to approve or decline, and payouts
+        whose checks failed, which the committee may allow anyway (with a reason for the records).
+        Plus the treasurer's own payment, which the treasurer can't check themselves.
+    -->
+    <ui:fragment rendered="#{groupBean.committee and not empty groupBean.forCommittee}">
+        <section class="card flush attention" id="approve">
+            <div class="card-head">
+                <div>
+                    <h2>Needs your decision</h2>
+                    <p class="muted">Big payouts need a second person to say yes. As a committee member, that's you.</p>
+                </div>
+            </div>
+            <h:form>
+                <ui:repeat value="#{groupBean.forCommittee}" var="fc">
+                    <div class="task-row">
+                        <div class="person">
+                            <span class="avatar">#{fmt.initials(fc.memberName)}</span>
+                            <span class="name">Payout to #{fc.memberName}
+                                <span class="sub">Planned for #{fmt.day(fc.payoutDate)} by #{fc.initiatedBy}</span></span>
+                        </div>
+                        <span class="strong amt task-amount">#{fmt.rand(fc.amount)}</span>
+
+                        <ui:fragment rendered="#{fc.status eq 'PENDING_APPROVAL'}">
+                            <div class="task-note good">#{fmt.checks(fc.eligibilityCheck)}#{empty fc.overrideReason ? '' : ': ' += fc.overrideReason}</div>
+                            <div class="task-actions">
+                                <h:commandButton value="Approve" action="#{groupBean.approve(fc.id)}" styleClass="btn sm primary"/>
+                                <button type="button" class="link danger" onclick="return svReveal(this, 'decline-#{fc.id}')">Decline…</button>
+                                <div class="reason-box" id="decline-#{fc.id}" hidden="hidden">
+                                    <h:inputText value="#{groupBean.notes[fc.id]}" pt:placeholder="Why are you declining?" pt:aria-label="Reason"/>
+                                    <h:commandButton value="Decline payout" action="#{groupBean.decline(fc.id)}" styleClass="btn sm danger"/>
+                                </div>
+                            </div>
+                        </ui:fragment>
+
+                        <ui:fragment rendered="#{fc.status eq 'SCHEDULED'}">
+                            <div class="task-note">Checks failed: #{fmt.reason(fc.eligibilityNotes)}. You can allow it anyway if the committee agrees.</div>
+                            <div class="task-actions">
+                                <button type="button" class="btn sm" onclick="return svReveal(this, 'allow-#{fc.id}')">Allow it anyway…</button>
+                                <div class="reason-box" id="allow-#{fc.id}" hidden="hidden">
+                                    <h:inputText value="#{groupBean.notes[fc.id]}" pt:placeholder="Why does the committee allow it?" pt:aria-label="Reason"/>
+                                    <h:commandButton value="Allow it" action="#{groupBean.override(fc.id)}" styleClass="btn sm primary"/>
+                                </div>
+                            </div>
+                        </ui:fragment>
+                    </div>
+                </ui:repeat>
+            </h:form>
+        </section>
+    </ui:fragment>
+
+    <ui:fragment rendered="#{groupBean.committee and not empty groupBean.toCheck}">
+        <ui:include src="/WEB-INF/includes/group/to-check.xhtml"/>
+    </ui:fragment>
+</ui:composition>

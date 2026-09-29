@@ -1,0 +1,95 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!-- Manage group → Rounds & payments: open/close rounds, the payment grid, every payment -->
+    <p class="section-intro">A round is one period of payments (for example, September). Open a round so members can pay,
+        close it when it's done, then mark it as balanced once the money matches the bank.</p>
+
+    <ui:fragment rendered="#{groupBean.treasurer and groupBean.activeGroup}">
+        <section class="card pad">
+            <h:form styleClass="inline" rendered="#{not groupBean.cycleOpen}">
+                <span class="strong">No round is open.</span>
+                <h:outputLabel for="newDue" value="Due date" styleClass="muted"/>
+                <h:inputText id="newDue" value="#{groupBean.newCycleDue}" pt:type="date" style="max-width:180px">
+                    <f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText>
+                <h:commandButton value="Open the next round" action="#{groupBean.openCycle}" styleClass="btn primary"/>
+                <span class="muted small">Leave the date empty to follow on from the last round.</span>
+            </h:form>
+            <h:form styleClass="inline" rendered="#{groupBean.cycleOpen}">
+                <span>The <strong>#{roundName}</strong> round is open, due #{fmt.date(cur.dueDate)}. #{cur.completionPercent}% of members have paid in full.</span>
+                <h:commandButton value="Close this round" action="#{groupBean.closeCycle(cur.id)}" styleClass="btn"
+                                 pt:onclick="return confirm('Close this round? No more payments can be recorded for it.')"/>
+            </h:form>
+        </section>
+    </ui:fragment>
+
+    <!-- Grid: one block per member per round -->
+    <section class="card flush">
+        <div class="card-head">
+            <h2>Payment grid · last #{groupBean.matrix.cycles.size()} rounds · <span class="amt">#{fmt.rand(g.contributionAmount)}</span> each</h2>
+            <div class="legend">
+                <span><i class="block PAID"></i>Paid</span>
+                <span><i class="block LATE"></i>Paid late</span>
+                <span><i class="block PARTIAL"></i>Part paid</span>
+                <span><i class="block AWAITING"></i>Being checked</span>
+                <span><i class="block OUTSTANDING"></i>Not paid</span>
+            </div>
+        </div>
+        <div class="scroll-x">
+            <div class="min">
+                <ui:param name="gridCols" value="minmax(150px,2fr) repeat(#{groupBean.matrix.cycles.size()},minmax(36px,1fr)) minmax(90px,1fr)"/>
+                <div class="matrix-row list-head" style="grid-template-columns:#{gridCols}">
+                    <span>Member</span>
+                    <ui:repeat value="#{groupBean.matrix.cycles}" var="col"><span style="text-align:center" title="Due #{fmt.date(col.dueDate)}">#{col.label}</span></ui:repeat>
+                    <span class="num">Paid in</span>
+                </div>
+                <ui:repeat value="#{groupBean.matrix.rows}" var="mr">
+                    <div class="matrix-row" style="grid-template-columns:#{gridCols}">
+                        <div class="person"><span class="avatar sm">#{fmt.initials(mr.name)}</span><span class="name">#{mr.name}</span></div>
+                        <ui:repeat value="#{mr.cells}" var="cell"><div class="cell"><span class="block #{cell}" title="#{cell eq 'AWAITING' ? 'Being checked' : (cell eq 'OUTSTANDING' ? 'Not paid' : fmt.label(cell))}"></span></div></ui:repeat>
+                        <span class="num strong amt">#{fmt.rand(mr.totalVerified)}</span>
+                    </div>
+                </ui:repeat>
+                <ui:fragment rendered="#{empty groupBean.matrix.rows}"><div class="empty">No rounds yet.</div></ui:fragment>
+            </div>
+        </div>
+    </section>
+
+    <section class="card flush">
+        <div class="card-head"><h2>Rounds</h2></div>
+        <h:form>
+            <ui:repeat value="#{groupBean.cycleList}" var="cy">
+                <div class="list-row cols-rounds">
+                    <div><div class="strong">#{fmt.round(cy.dueDate, g.frequency)}</div><div class="muted small">Due #{fmt.date(cy.dueDate)}</div></div>
+                    <span><span class="amt strong">#{fmt.rand(cy.verifiedTotal)}</span> <span class="muted">collected</span></span>
+                    <span class="muted">#{cy.paidInFull} of #{cy.expectedPayers} paid#{cy.awaitingVerification gt 0 ? ' · ' += cy.awaitingVerification += ' being checked' : ''}</span>
+                    <div class="end">
+                        <span class="pill #{fmt.tone(cy.status)}">#{fmt.roundState(cy.status)}</span>
+                        <h:commandButton rendered="#{groupBean.treasurer and cy.status eq 'CLOSED'}" value="Mark as balanced" action="#{groupBean.reconcileCycle(cy.id)}" styleClass="btn sm"/>
+                    </div>
+                </div>
+            </ui:repeat>
+        </h:form>
+        <ui:fragment rendered="#{empty groupBean.cycleList}"><div class="empty">No rounds yet.</div></ui:fragment>
+    </section>
+
+    <section class="card flush">
+        <div class="card-head"><h2>Every payment</h2></div>
+        <div class="scroll-x"><div class="min">
+            <div class="list-row list-head cols-contrib"><span>Date</span><span>Member</span><span>Round</span><span class="num">Amount</span><span>Reference</span><span class="num">Status</span></div>
+            <ui:repeat value="#{groupBean.contributionList}" var="ep">
+                <div class="list-row cols-contrib">
+                    <span class="muted">#{fmt.shortDate(ep.contributionDate)}</span>
+                    <span class="strong">#{ep.memberName}</span>
+                    <span>#{groupBean.roundOf(ep.cycleId)}</span>
+                    <span class="num strong amt">#{fmt.rand(ep.amount)}</span>
+                    <span class="muted">#{ep.paymentReference}</span>
+                    <div class="end"><span class="pill #{fmt.tone(ep.verificationStatus)}">#{fmt.payment(ep.verificationStatus)}</span></div>
+                </div>
+            </ui:repeat>
+            <ui:fragment rendered="#{empty groupBean.contributionList}"><div class="empty">No payments yet.</div></ui:fragment>
+        </div></div>
+    </section>
+</ui:composition>

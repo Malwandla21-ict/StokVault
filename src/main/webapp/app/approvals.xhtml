@@ -3,52 +3,46 @@
                 xmlns:ui="jakarta.faces.facelets"
                 xmlns:pt="jakarta.faces.passthrough"
                 template="/WEB-INF/templates/layout.xhtml">
-    <!-- Committee dashboard (SDD 6.1): the payout approval queue (four-eyes principle) -->
+    <!-- Committee (SDD 6.1): big payouts waiting for a second person's OK (the four-eyes rule), as a to-do list -->
     <ui:param name="nav" value="approvals"/>
     <ui:define name="title">Approvals</ui:define>
     <ui:define name="heading">Approvals</ui:define>
-    <ui:define name="subtitle">#{empty approvalsBean.queue ? 'Nothing is waiting for you' : approvalsBean.queue.size() += ' payout(s) need a second person'}</ui:define>
+    <ui:define name="subtitle">#{empty approvalsBean.queue ? 'Nothing to approve right now ✓' : fmt.count(approvalsBean.queue.size(), 'payout needs', 'payouts need') += ' your OK'}</ui:define>
 
     <ui:define name="content">
-        <p class="muted" style="max-width:70ch">Payouts above a group's approval threshold need a committee member who is neither the
-            treasurer who confirmed it nor the person being paid.</p>
+        <p class="section-intro">Big payouts need a second person to say yes. You can't approve a payout to yourself,
+            or one you confirmed as the treasurer.</p>
 
-        <h:panelGroup layout="block" styleClass="callout good" rendered="#{empty approvalsBean.queue}">All caught up.</h:panelGroup>
+        <h:panelGroup layout="block" styleClass="callout good" rendered="#{empty approvalsBean.queue}">Nothing to approve right now ✓</h:panelGroup>
 
-        <h:form>
-            <div class="group-cards">
-                <ui:repeat value="#{approvalsBean.queue}" var="p">
-                    <article class="card pad group-card">
-                        <div class="inline" style="justify-content:space-between">
-                            <span class="kicker">Payout to</span>
-                            <span class="pill warn">Pending approval</span>
+        <ui:fragment rendered="#{not empty approvalsBean.queue}">
+            <section class="card flush">
+                <h:form>
+                    <ui:repeat value="#{approvalsBean.queue}" var="p">
+                        <div class="task-row">
+                            <div class="person">
+                                <span class="avatar">#{fmt.initials(p.memberName)}</span>
+                                <span class="name">Payout to #{p.memberName}
+                                    <span class="sub">#{approvalsBean.groupName(p.groupId)} · planned for #{fmt.day(p.payoutDate)} by #{p.initiatedBy}</span></span>
+                            </div>
+                            <span class="strong amt task-amount">#{fmt.rand(p.amount)}</span>
+                            <div class="task-note good">#{fmt.checks(p.eligibilityCheck)}#{empty p.overrideReason ? '' : ': ' += p.overrideReason}</div>
+                            <div class="task-actions">
+                                <ui:fragment rendered="#{approvalsBean.isOwn(p)}"><span class="muted small">This payout is to you, so another committee member must approve it.</span></ui:fragment>
+                                <ui:fragment rendered="#{not approvalsBean.isOwn(p)}">
+                                    <h:commandButton value="Approve" action="#{approvalsBean.approve(p)}" styleClass="btn sm primary"/>
+                                    <button type="button" class="link danger" onclick="return svReveal(this, 'decline-#{p.id}')">Decline…</button>
+                                    <div class="reason-box" id="decline-#{p.id}" hidden="hidden">
+                                        <h:inputText value="#{approvalsBean.reasons[p.id]}" pt:placeholder="Why are you declining?" pt:aria-label="Reason for declining"/>
+                                        <h:commandButton value="Decline payout" action="#{approvalsBean.decline(p)}" styleClass="btn sm danger"/>
+                                    </div>
+                                </ui:fragment>
+                                <a class="link" href="group.xhtml?id=#{p.groupId}">Open the stokvel →</a>
+                            </div>
                         </div>
-                        <div class="person">
-                            <span class="avatar lg">#{fmt.initials(p.memberName)}</span>
-                            <span class="name" style="font-size:17px">#{p.memberName}<span class="sub">#{p.notes}</span></span>
-                        </div>
-                        <div class="big-number amt">#{fmt.rand(p.amount)}</div>
-                        <dl class="facts">
-                            <dt>Eligibility check</dt><dd><span class="pill #{fmt.tone(p.eligibilityCheck)}">#{fmt.label(p.eligibilityCheck)}</span></dd>
-                            <ui:fragment rendered="#{not empty p.overrideReason}"><dt>Override</dt><dd>#{p.overrideReason} (#{p.overriddenBy})</dd></ui:fragment>
-                            <dt>Initiated by</dt><dd>#{p.initiatedBy}</dd>
-                            <dt>Confirmed by</dt><dd>#{p.confirmedBy}</dd>
-                            <dt>Payout date</dt><dd>#{fmt.date(p.payoutDate)}</dd>
-                        </dl>
-                        <div class="foot">
-                            <ui:fragment rendered="#{approvalsBean.isOwn(p)}"><span class="muted">This payout is to you, so another committee member must approve it.</span></ui:fragment>
-                            <ui:fragment rendered="#{not approvalsBean.isOwn(p)}">
-                                <div class="inline">
-                                    <h:commandButton value="Approve" action="#{approvalsBean.approve(p)}" styleClass="btn primary"/>
-                                    <h:inputText value="#{approvalsBean.reasons[p.id]}" pt:placeholder="Reason for declining" pt:aria-label="Reason for declining" style="flex:1;min-width:140px"/>
-                                    <h:commandButton value="Decline" action="#{approvalsBean.decline(p)}" styleClass="btn danger"/>
-                                </div>
-                            </ui:fragment>
-                            <a href="group.xhtml?id=#{p.groupId}&amp;tab=payouts" style="font-size:13px">Open the group's payouts</a>
-                        </div>
-                    </article>
-                </ui:repeat>
-            </div>
-        </h:form>
+                    </ui:repeat>
+                </h:form>
+            </section>
+        </ui:fragment>
     </ui:define>
 </ui:composition>

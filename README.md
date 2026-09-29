@@ -174,21 +174,27 @@ change.
 | Page | Who | What |
 |---|---|---|
 | **Log in** | everyone | Phone number and password, or **"Text me a login code"**. New members use a code the first time, then choose a password. |
-| **My stokvels** | everyone | For each group: what I've paid, my arrears, what I've received, whether the current cycle is paid, and for rotational groups **my place in the queue and the estimated date of my payout**. |
-| Group → **Overview** | everyone | Balance, the current cycle, standings (officers see every member; members only themselves), statement downloads, and "I've paid" to report a payment. |
-| Group → **Contributions** | treasurer | Open, close and reconcile cycles; the **"who has paid" grid**; record payments; **verify or reject** flagged ones. |
-| Group → **Payouts** | treasurer / committee | **Initiate a payout** (the rule depends on the group type), see the automated eligibility result, confirm, **approve** (committee), **override** a failed check with a reason (committee), mark paid, cancel. |
-| Group → **Members** | officers | Find people by phone or ID number, register new people (with POPIA consent), set roles and payout order, remove members. |
-| Group → **Audit & reports** | officers | The audit trail with its **chain-verification result**; group statements and audit trail as PDF or CSV. |
-| Group → **Settings** | treasurer / admin | Contribution amount, frequency, approval threshold, required completion %, burial benefit; activate, suspend, resume or close the group. |
-| **Approvals** | committee | High-value payouts waiting for a second person, across all of their groups. |
-| **Coop Office** | admin | Platform-wide figures and audit status for every group, registering groups and people, the notification log (including dead-lettered messages), and running jobs on demand. |
+| **My stokvels** | everyone | One card per stokvel, most urgent first, each with **one status line** ("R 500 due Fri 3 Oct", "Treasurer is checking your payment", "All paid ✓") and at most one button (**Pay now**). Rotational groups show **my place in the payout line**. Treasurers and committee members also get **"Needs your attention"**: payments to check, members who haven't paid, payouts ready, payouts to approve. |
+| Group (member / committee) | everyone | One page: this round's payment with **Pay now**, **Your turn**, **Your payments**, and a folded **More about this group** (totals, payout order, who has paid, members, my statement). Committee members also get **Needs your decision** (approve, decline, or allow a failed payout anyway, with a reason). |
+| Group → **This month** | treasurer | **To check** (mark as paid / not accepted, with a reason), **Not paid yet** (record a payment), **Paid ✓**, and the payout card with its **one next step** (plan, confirm, wait for the committee, mark as paid out). |
+| Group → **Manage group → Rounds & payments** | officers | Open, close and balance rounds; the **payment grid**; every payment. |
+| Group → **Manage group → Payouts** | officers | Payout order, **plan a payout** (the rule depends on the group type), the automatic check result, confirm, **approve** / **allow anyway** (committee), mark as paid out, cancel. |
+| Group → **Manage group → Members** | officers | Find people by phone or ID number, register new people (with POPIA consent), set roles and payout order, remove members. |
+| Group → **Manage group → Records & reports** | officers | The history of every change with its **tamper check**; group statements and history as PDF or CSV. |
+| Group → **Manage group → Settings** | officers (changes: treasurer / admin) | Contribution amount, frequency, approval limit, required completion %, burial benefit; activate, pause, resume or close the group. |
+| **Approvals** | committee | Big payouts waiting for a second person, across all of their groups, as a to-do list. |
+| **Coop Office** | admin | Register a stokvel or a person first, then every stokvel with its records check (**Safe ✓ / Changed!**), people, messages sent (including ones that couldn't be sent), and running the nightly jobs now. |
 | **My account** | everyone | Password, contact details, preferred channel (SMS/WhatsApp), and the messages sent to me. |
 
 The pages only show buttons a user is allowed to use. The services check every rule again, so hiding a button is
 never the security boundary.
 
-**Design.** The UI follows the StokVault design reference (`StokVault App.dc.html`):
+**Simple by design.** Every screen answers "what do I need to do right now?". Screens follow each person's
+**tasks** (decided by their role *in that stokvel*), not the database tables, and use plain words ("Treasurer is
+checking it", "3rd in line", "September" instead of "Cycle 4"). All wording lives in `web/Format.java`. The group
+page is split into small Facelets includes in `WEB-INF/includes/group/`. See `docs/ui-summary-for-sdd-6.1.md`.
+
+**Look and feel.** The UI follows the StokVault design reference (`StokVault App.dc.html`):
 
 - Archivo typeface and the brand palette
 - A sidebar with the current group and section navigation
@@ -451,8 +457,8 @@ The base URL is `http://localhost:8081/stokvault/api`. The API speaks JSON, and 
   - each entry's SHA-256 covers the previous entry's hash.
 
   **Try it:** in pgAdmin, run `ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_update_or_delete;`, change the
-  `details` of any entry, and open the group's **Audit & reports** tab. It shows **"AUDIT TRAIL TAMPERED WITH"** and
-  the entry number. Re-enable the trigger afterwards.
+  `details` of any entry, and open the group's **Manage group → Records & reports**. It shows **"Warning: someone
+  has changed the records!"** and the entry number. Re-enable the trigger afterwards.
 - SQL injection is prevented by using only JPA parameters; every input is checked by Bean Validation; CSV exports
   neutralise spreadsheet formulas.
 - **HTTPS (SDD 6.4)** is left off for local development. For staging and production, uncomment the

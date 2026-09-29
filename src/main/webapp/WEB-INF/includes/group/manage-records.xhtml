@@ -1,0 +1,37 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:ui="jakarta.faces.facelets">
+    <!-- Manage group → Records & reports: the tamper check, statements and the full history (audit trail) -->
+    <p class="section-intro">Every change in this stokvel is written down here and can never be quietly edited.
+        Each record is locked to the one before it, so if anyone changes or deletes an old record, StokVault notices.</p>
+
+    <h:panelGroup layout="block" styleClass="callout #{groupBean.chain.valid ? 'good' : 'bad'}" rendered="#{groupBean.chain ne null}">
+        <strong>#{groupBean.chain.valid ? 'Records checked: nothing has been changed ✓' : 'Warning: someone has changed the records!'}</strong>
+        <div class="small" style="margin-top:4px">#{groupBean.chain.message}. (Technical: each entry's SHA-256 hash covers the entry before it.)</div>
+    </h:panelGroup>
+
+    <section class="card pad">
+        <h2>Download</h2>
+        <div class="inline">
+            <a class="btn" href="#{api}/reports/statement?format=pdf">Group statement (PDF)</a>
+            <a class="link" href="#{api}/reports/statement?format=csv">Group statement (spreadsheet)</a>
+            <a class="link" href="#{api}/reports/audit?format=pdf">History (PDF)</a>
+            <a class="link" href="#{api}/reports/audit?format=csv">History (spreadsheet)</a>
+        </div>
+    </section>
+
+    <section class="card flush">
+        <div class="card-head"><h2>History of every change</h2><span class="muted">Newest first</span></div>
+        <div class="scroll-x"><div class="min">
+            <ui:repeat value="#{groupBean.auditList}" var="e">
+                <div class="list-row cols-audit">
+                    <span class="rot-pos" style="font-size:15px">#{e.sequence}</span>
+                    <div><div class="strong">#{fmt.action(e.action)}</div><div class="muted small">#{fmt.dateTime(e.loggedAt)}</div></div>
+                    <span>#{e.performedBy}</span>
+                    <span class="details">#{fmt.details(e.details)}</span>
+                    <span class="hash" title="#{e.entryHash}">#{fmt.shortHash(e.entryHash)}</span>
+                </div>
+            </ui:repeat>
+        </div></div>
+    </section>
+</ui:composition>

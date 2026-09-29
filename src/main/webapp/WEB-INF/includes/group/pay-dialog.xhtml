@@ -1,0 +1,61 @@
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:h="jakarta.faces.html"
+                xmlns:f="jakarta.faces.core"
+                xmlns:ui="jakarta.faces.facelets"
+                xmlns:pt="jakarta.faces.passthrough">
+    <!--
+        The payment window. Members tell the treasurer they've paid (it's checked before it
+        counts); the treasurer records a payment for anyone. Amount and date are filled in
+        already, so usually only the reference is needed.
+    -->
+    <ui:fragment rendered="#{groupBean.canRecord}">
+        <dialog id="record" class="modal">
+            <h:form styleClass="form">
+                <div>
+                    <h2>#{groupBean.treasurer ? 'Record a payment' : 'Tell us you paid'}</h2>
+                    <span class="muted">#{roundName} payment</span>
+                </div>
+
+                <ui:fragment rendered="#{groupBean.treasurer}">
+                    <div class="field">
+                        <span class="label">Who paid?</span>
+                        <h:selectOneRadio id="payer" value="#{groupBean.payerId}" layout="pageDirection" styleClass="choice">
+                            <f:selectItems value="#{groupBean.unpaidOthers}" var="payerRow" itemLabel="#{payerRow.memberName}" itemValue="#{payerRow.memberId}"/>
+                            <f:selectItem itemLabel="Me (a committee member will check it)" itemValue="#{null}"/>
+                        </h:selectOneRadio>
+                    </div>
+                </ui:fragment>
+                <ui:fragment rendered="#{not groupBean.treasurer}">
+                    <p class="muted">First pay the money into the stokvel's bank account (or give it to your treasurer). Then fill this in.</p>
+                </ui:fragment>
+
+                <!-- Amount and date: already right in most cases, so folded away -->
+                <details class="prefilled">
+                    <summary><span class="amt">#{fmt.rand(groupBean.amount)}</span> · paid today <span class="link">Change</span></summary>
+                    <div class="form grid">
+                        <div class="field"><h:outputLabel for="ramount" value="Amount (R)"/>
+                            <h:inputText id="ramount" value="#{groupBean.amount}" pt:type="number" pt:step="0.01" pt:inputmode="decimal"/></div>
+                        <div class="field"><h:outputLabel for="rdate" value="Date paid"/>
+                            <h:inputText id="rdate" value="#{groupBean.paidOn}" pt:type="date"><f:convertDateTime type="localDate" pattern="yyyy-MM-dd"/></h:inputText></div>
+                    </div>
+                </details>
+
+                <div class="field"><h:outputLabel for="rref" value="Reference on the bank slip or receipt"/>
+                    <h:inputText id="rref" value="#{groupBean.reference}" pt:placeholder="e.g. BONGANI SEP" pt:required="required"/></div>
+                <div class="field"><span class="label">How was it paid?</span>
+                    <h:selectOneRadio value="#{groupBean.method}" layout="lineDirection" styleClass="seg-radio">
+                        <f:selectItems value="#{groupBean.paymentMethods}" var="pm" itemLabel="#{fmt.method(pm)}" itemValue="#{pm}"/>
+                    </h:selectOneRadio></div>
+
+                <p class="note">#{groupBean.treasurer
+                    ? 'Payments you record for others count straight away. Your own payment is checked by a committee member.'
+                    : 'Your treasurer will check this against the bank statement. You will get an SMS once it is confirmed.'}</p>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="return svClose(this)">Cancel</button>
+                    <h:commandButton value="#{groupBean.treasurer ? 'Save payment' : 'Send to my treasurer'}" action="#{groupBean.recordContribution}" styleClass="btn primary"/>
+                </div>
+            </h:form>
+        </dialog>
+    </ui:fragment>
+</ui:composition>
